@@ -1,0 +1,1087 @@
+# Data-Forge Implementation Plan
+
+## Overview
+This document outlines a staged approach to building Data-Forge, a service for generating Kerchunk reference files and managing catalogs for climate datasets. **Key Architecture**: Data-Forge is a compute service that writes reference files directly to user-specified storage locations (S3, HTTPS-accessible endpoints, etc.). The service does NOT provide internal storage; users manage their own file storage infrastructure.
+
+---
+
+## Stage 0: Project Setup & Foundation (Week 1)
+
+### Goals
+- Establish project structure
+- Set up development environment
+- Create basic tooling and CI/CD
+
+### Tasks
+1. **Project Structure**
+   - Initialize Python project with Poetry/pip-tools
+   - Set up directory structure:
+     ```
+     data-forge/
+     ├── src/
+     │   ├── dataforge/
+     │   │   ├── api/          # FastAPI routes
+     │   │   ├── core/         # Core business logic
+     │   │   ├── models/       # Data models
+     │   │   ├── workers/      # Job workers
+     │   │   ├── cli/          # CLI tool
+     │   │   └── utils/        # Utilities
+     ├── tests/
+     ├── docs/
+     ├── docker/
+     └── deployments/
+     ```
+
+2. **Development Environment**
+   - Create `pyproject.toml` with dependencies:
+     - FastAPI, uvicorn
+     - kerchunk, fsspec, h5netcdf, xarray
+     - redis, dramatiq
+     - dask, distributed
+     - pydantic for validation
+     - s3fs, aiohttp for remote I/O
+     - Click/Typer for CLI
+   - Set up Docker development environment
+   - Create `.env.example` for configuration
+
+3. **Testing & CI**
+   - Set up pytest framework
+   - Configure GitHub Actions / GitLab CI
+   - Set up pre-commit hooks (black, ruff, mypy)
+
+### Deliverables
+- ✅ Project skeleton
+- ✅ Development environment
+- ✅ Basic CI/CD pipeline
+
+---
+
+## Stage 1: Core Kerchunk Conversion (Week 2)
+
+### Goals
+- Implement basic Kerchunk conversion functionality
+- Support single file and multi-file conversion
+- Support writing to remote storage locations
+
+### Tasks
+1. **Conversion Module** (`src/dataforge/core/converter.py`)
+   - Implement `KerchunkConverter` class
+   - Support single NetCDF file conversion
+   - Support multi-file conversion with concatenation along specified dimensions
+   - Handle different chunk strategies
+   - Write output directly to user-specified paths (S3, local, etc.)
+   - Basic error handling and logging
+
+2. **Storage Writer** (`src/dataforge/core/storage.py`)
+   - Implement fsspec-based output writer
+   - Support writing to S3 (s3://)
+   - Support writing to local filesystem
+   - Support HTTPS PUT if needed (for object storage)
+   - Handle authentication for output destinations
+
+3. **Configuration** (`src/dataforge/models/config.py`)
+   - Define conversion configuration model:
+     - inline_threshold (default: 300)
+     - concat_dims (e.g., ['time'])
+     - identical_dims (e.g., ['lat', 'lon', 'lat_bnds', 'lon_bnds'])
+     - output_path (required: user-specified destination)
+     - publish_to_stac (boolean, default: true)
+
+4. **Testing**
+   - Unit tests for converter
+   - Test with sample NetCDF files
+   - Test writing to mock S3 (moto) and local filesystem
+   - Benchmark performance
+
+### Deliverables
+- ✅ Working Kerchunk converter
+- ✅ Output to user-specified locations
+- ✅ Unit tests with >80% coverage
+- ✅ Documentation for conversion module
+
+---
+
+## Stage 2: Job Queue System + Basic API (Week 3-4)
+
+### Goals
+- Implement asynchronous job processing
+- Set up Redis + dramatiq for job management
+- Create FastAPI application with core endpoints
+- Job monitoring capabilities
+
+### Tasks
+1. **Job Queue Setup**
+   - Configure Redis connection (job metadata storage only)
+   - Set up dramatiq actors
+   - Implement job states: QUEUED, RUNNING, COMPLETED, FAILED, CANCELLED
+
+2. **Job Models** (`src/dataforge/models/job.py`)
+   - Define job data structures:
+     ```python
+     class JobSubmission:
+         input_files: List[str]  # S3, HTTPS, OpenDAP URLs
+         dataset_id: str
+         output_path: str  # User-specified S3/storage path
+         concat_dims: List[str] = ['time']
+         identical_dims: Optional[List[str]]
+         inline_threshold: int = 300
+         metadata: Optional[Dict[str, Any]]
+         publish_to_stac: bool = True
+         
+     class Job:
+         id: str  # job-{uuid}
+         status: JobStatus
+         submission: JobSubmission
+         created_at: datetime
+         started_at: Optional[datetime]
+         completed_at: Optional[datetime]
+         updated_at: datetime
+         progress: Optional[JobProgress]  # files processed / total
+         error_message: Optional[str]
+         result_url: Optional[str]  # Points to user's output_path
+     ```
+
+3. **Worker Implementation** (`src/dataforge/workers/converter_worker.py`)
+   - Create dramatiq actor for conversion
+   - Integrate with Stage 1 converter
+   - Handle job lifecycle and state updates
+   - Write reference files directly to user-specified output_path
+   - Store job metadata only in Redis (NOT the reference files)
+   - Update job progress (files processed / total)
+
+4. **Job Storage**
+   - Redis for job metadata and status only
+   - No internal file storage - all outputs go to user paths
+   - Job results contain URL/path to user's storage location
+
+5. **API Structure** (`src/dataforge/api/`)
+   - Set up FastAPI application
+   - Configure CORS, middleware
+   - Implement health check endpoint
+   - Configure OpenAPI/Swagger docs
+
+6. **Core Endpoints**
+   - `POST /api/v1/jobs` - Submit conversion job (requires output_path)
+   - `GET /api/v1/jobs/{job_id}` - Get job status and progress
+   - `GET /api/v1/jobs` - List jobs (with pagination, filtering by status)
+   - `GET /api/v1/jobs/{job_id}/result` - Get result URL (user's output path)
+   - `DELETE /api/v1/jobs/{job_id}` - Cancel job (if queued/running)
+
+7. **Request/Response Models** (`src/dataforge/models/api.py`)
+   - Define Pydantic models for requests/responses
+   - Input validation (URL formats, path validation)
+   - OpenAPI documentation
+   - Example requests matching PRD CLI examples
+
+8. **Testing**
+   - Integration tests for API endpoints
+   - Worker tests with mock S3 destinations
+   - Test job submission and status retrieval
+   - Test progress tracking
+
+### Deliverables
+- ✅ Asynchronous job processing
+- ✅ Job state management (metadata only in Redis)
+- ✅ Working REST API with user-specified output paths
+- ✅ OpenAPI/Swagger documentation
+- ✅ Integration tests
+
+---
+
+## Stage 3: Remote Data Source Support (Week 5)
+
+### Goals
+- Support fetching data from remote sources (input side)
+- Support writing to remote destinations (output side)
+- Integrate with S3, HTTPS endpoints
+- Handle authentication for both input and output
+
+### Tasks
+1. **Data Source Module** (`src/dataforge/core/data_sources.py`)
+   - Implement fsspec-based data fetching for inputs
+   - Support S3 input (s3://)
+   - Support HTTPS input (https://)
+   - Support OpenDAP if needed for ESGF
+   - Handle credentials for input sources
+   - Glob pattern expansion for multiple files
+
+2. **Output Destinations** (`src/dataforge/core/output_writer.py`)
+   - Extend storage writer from Stage 1
+   - Support S3 output with proper credentials
+   - Support HTTPS PUT/POST for object storage
+   - Handle authentication tokens
+   - Verify write permissions before job execution
+   - Generate public-accessible URLs where applicable
+
+3. **Enhanced Converter**
+   - Modify converter to work with remote input sources
+   - Add streaming support for large files
+   - Optimize network I/O
+   - Write directly to remote output destinations
+   - No local staging of final reference files
+
+4. **Credential Management**
+   - Support passing S3 credentials for input sources
+   - Support passing output destination credentials
+   - Secure credential storage (environment vars, secrets)
+   - Per-job credential isolation
+
+5. **Configuration**
+   - Add data source configuration to job model
+   - S3 access keys, authentication tokens
+   - Output destination credentials
+   - Region, endpoint configuration
+
+6. **Testing**
+   - Test with public S3 buckets (inputs)
+   - Test writing to test S3 buckets (outputs)
+   - Test with HTTPS endpoints
+   - Mock tests for authentication
+   - Test permission failures gracefully
+
+### Deliverables
+- ✅ Remote input data source support
+- ✅ Remote output destination support
+- ✅ S3 and HTTPS integration (input and output)
+- ✅ Authentication handling for both directions
+
+---
+
+## Stage 4: STAC Catalog Integration (Week 6-7)
+
+### Goals
+- Implement STAC item generation from Kerchunk outputs
+- Publish to ESGF-NG STAC catalog
+- Service authenticates to catalog; catalog is public read-only
+
+### Tasks
+1. **STAC Module** (`src/dataforge/core/stac.py`)
+   - Implement STAC Item generation from job metadata
+   - Create Kerchunk reference as STAC asset (pointing to user's output_path)
+   - Extract STAC metadata from NetCDF (CF conventions, CMIP6/7 metadata)
+   - Support CMIP6/CMIP7 specific metadata fields
+   - Generate STAC Item ID from dataset_id
+
+2. **STAC API Client** (`src/dataforge/core/stac_client.py`)
+   - Create client for ESGF-NG STAC API
+   - Implement POST to catalog endpoint (create item)
+   - Implement PUT/PATCH for updates
+   - Handle service authentication (API token/credentials)
+   - **Note**: Service authenticates to publish; catalog is public read-only for users
+   - Error handling and retry logic
+
+3. **STAC Configuration**
+   - STAC catalog base URL
+   - Service credentials/API tokens (not user credentials)
+   - Collection ID for CMIP6/CMIP7
+   - Metadata templates
+
+4. **Worker Updates**
+   - After successful conversion, publish to STAC if enabled
+   - Handle STAC publication failures gracefully
+   - Update job status with STAC publication result
+
+5. **API Endpoints**
+   - Enhance `POST /api/v1/jobs` with `publish_to_stac` option
+   - `GET /api/v1/jobs/{job_id}/stac` - Retrieve STAC item if published
+   - Link to public STAC catalog entry
+
+6. **Testing**
+   - Unit tests for STAC item generation
+   - Integration tests with mock STAC API
+   - Test CMIP6/CMIP7 metadata extraction
+   - Test catalog publication flow
+   - Test fallback when STAC unavailable
+
+### Deliverables
+- ✅ STAC item generation with Kerchunk asset
+- ✅ ESGF-NG STAC catalog integration
+- ✅ Service-level authentication to catalog
+- ✅ CMIP6/CMIP7 metadata support
+- ✅ STAC integration tests
+
+---
+
+## Stage 5: Dask Parallelization (Week 8)
+
+### Goals
+- Add Dask for job-level parallelization
+- Improve performance for large multi-file datasets
+- Support distributed processing within a job
+
+### Tasks
+1. **Dask Integration** (`src/dataforge/core/dask_converter.py`)
+   - Set up Dask client (local cluster initially)
+   - Parallelize multi-file Kerchunk generation
+   - Use Dask to process files in parallel (not just sequential)
+   - Implement chunked processing for memory efficiency
+   - Proper Dask cluster lifecycle management
+
+2. **Memory Management**
+   - Configure Dask worker memory limits
+   - Implement spilling to disk for large jobs
+   - Monitor memory usage per job
+   - Prevent OOM errors
+
+3. **Configuration** (`src/dataforge/models/dask_config.py`)
+   - Dask cluster configuration
+   - Worker count (default: based on available CPUs)
+   - Memory per worker
+   - Scheduler options
+   - Thread vs process workers
+
+4. **Worker Updates**
+   - Integrate Dask into dramatiq workers
+   - Create Dask cluster per job or shared pool
+   - Handle Dask cluster cleanup
+   - Progress reporting from Dask tasks
+
+5. **Performance Optimization**
+   - Optimize file reading with Dask
+   - Batch file processing
+   - Reduce network I/O overhead
+   - Efficient memory usage patterns
+
+6. **Performance Testing**
+   - Benchmark with/without Dask
+   - Test with datasets of various sizes (10, 100, 1000+ files)
+   - Measure speedup vs sequential processing
+   - Optimize worker count and chunk strategies
+   - Memory profiling
+
+### Deliverables
+- ✅ Dask-based job-level parallelization
+- ✅ Significant performance improvements for multi-file datasets
+- ✅ Scalability tests and benchmarks
+- ✅ Memory-efficient processing
+
+---
+
+## Stage 6: Docker & Deployment + CLI Tool (Week 9)
+
+### Goals
+- Containerize all services
+- Create Docker Compose setup for single-node deployment
+- Build CLI tool matching PRD examples
+- Prepare for Kubernetes deployment
+
+### Tasks
+1. **Docker Images**
+   - Create Dockerfile for API service
+   - Create Dockerfile for worker service(s)
+   - Optimize image sizes (multi-stage builds)
+   - Pin dependencies for reproducibility
+
+2. **Docker Compose** (`docker-compose.yml`)
+   - API service (FastAPI)
+   - Worker service(s) (dramatiq)
+   - Redis service (job metadata)
+   - Volume management (configuration only, no data storage)
+   - Network configuration
+   - Health checks for all services
+
+3. **Configuration Management**
+   - Environment variable configuration
+   - `.env` file for local development
+   - Secrets management (Redis password, S3 credentials, STAC API token)
+   - Support for multiple environments (dev, staging, prod)
+
+4. **CLI Tool** (`src/dataforge/cli/`)
+   - Use Click framework
+   - Implement commands per PRD examples:
+     - `dataforge login` - Authenticate (Globus Auth in Stage 7)
+     - `dataforge submit` - Submit job with all options
+     - `dataforge status <job-id>` - Check job status
+     - `dataforge list` - List jobs with filtering
+     - `dataforge get-url <job-id>` - Get result URL
+     - `dataforge stac show <job-id>` - View STAC item
+   - Support `--watch` for real-time status updates
+   - Colorized output with status indicators
+   - Progress bars for running jobs
+
+5. **CLI Client Library** (`src/dataforge/client/`)
+   - Create Python API client wrapping REST API
+   - Used by CLI and available for programmatic access
+   - Handle authentication, retries, pagination
+   - Async and sync variants
+
+6. **CLI Features**
+   - Rich progress display (files processed / total)
+   - Table formatting for job lists
+   - JSON output option for scripting
+   - Configuration file support (~/.dataforge/config)
+   - Batch job submission from YAML/JSON
+
+7. **Kubernetes Prep**
+   - Create base Kubernetes manifests
+   - Deployment, Service, ConfigMap, Secret templates
+   - Prepare for Helm chart (Stage 9 or post-MVP)
+   - Ingress configuration examples
+
+8. **Documentation**
+   - Deployment guide (Docker Compose)
+   - Configuration reference
+   - CLI usage guide with examples matching PRD
+   - Environment variable documentation
+   - Troubleshooting guide
+
+### Deliverables
+- ✅ Docker images for all services
+- ✅ Docker Compose setup for single-node deployment
+- ✅ Full-featured CLI tool matching PRD examples
+- ✅ Python client library
+- ✅ Deployment documentation
+- ✅ Kubernetes-ready manifests
+
+---
+
+## MVP CHECKPOINT (Week 9)
+
+### MVP Features Complete
+✅ Kerchunk conversion service with Dask parallelization  
+✅ REST API for job management  
+✅ User-specified output paths (no internal storage)  
+✅ ESGF-NG STAC catalog integration (service-authenticated)  
+✅ Asynchronous job processing with progress tracking  
+✅ Remote input sources (S3, HTTPS)  
+✅ Remote output destinations (S3, etc.)  
+✅ Docker deployment (single-node)  
+✅ CLI tool with all core commands  
+
+### MVP Testing
+- End-to-end testing with real CMIP6 datasets
+- User acceptance testing with data publishers
+- Performance benchmarking (single-file, multi-file, large datasets)
+- API load testing
+- Security audit (authentication, input validation)
+- CLI usability testing
+
+### MVP Documentation
+- User guide for data publishers
+- API documentation (OpenAPI/Swagger)
+- CLI reference and examples
+- Deployment guide (Docker Compose)
+- Architecture overview
+- Configuration reference
+
+---
+
+## Stage 7: Globus Auth Integration (Week 10-11)
+
+### Goals
+- Add Globus Auth for user authentication
+- Protect API endpoints with OAuth2
+- Support token-based CLI authentication
+
+### Tasks
+1. **Globus Auth Setup**
+   - Register Data-Forge as Globus application
+   - Configure OAuth2 scopes
+   - Set up callback URLs
+
+2. **API Authentication** (`src/dataforge/api/auth.py`)
+   - Implement Globus Auth middleware for FastAPI
+   - Token validation using Globus SDK
+   - User identity extraction
+   - Protected endpoint decorators
+   - API key support for programmatic access
+
+3. **User Management** (`src/dataforge/models/user.py`)
+   - Store user identity from Globus (sub/username)
+   - Associate jobs with users
+   - User-scoped job listings
+   - Resource quotas per user (optional)
+
+4. **CLI Authentication** (`src/dataforge/cli/auth.py`)
+   - `dataforge login` implementation
+   - OAuth2 device flow or browser-based flow
+   - Token storage (~/.dataforge/tokens.json)
+   - Token refresh logic
+   - `dataforge logout` command
+
+5. **API Updates**
+   - All job endpoints require authentication
+   - Jobs filtered by authenticated user
+   - Admin endpoints for monitoring (optional)
+
+6. **Testing**
+   - Mock Globus Auth for tests
+   - Test token validation
+   - Test user isolation (users can only see their jobs)
+   - Test CLI authentication flow
+
+7. **Documentation**
+   - Authentication guide
+   - Globus Auth setup instructions
+   - Token management
+   - Troubleshooting authentication issues
+
+### Deliverables
+- ✅ Globus Auth integration for API and CLI
+- ✅ User-scoped job management
+- ✅ Secure token handling
+- ✅ Authentication documentation
+
+---
+
+## Stage 8: Advanced Features (Week 12-13)
+
+### Goals
+- Enhanced chunk strategies and optimization
+- Better metadata handling for CMIP6/CMIP7
+- Improved error handling and validation
+- Basic monitoring and metrics
+
+### Tasks
+1. **Advanced Chunk Strategies** (`src/dataforge/core/chunking.py`)
+   - Configurable dimension selection strategies
+   - Auto-detect optimal chunk sizes based on data shape
+   - Grid-aware chunking recommendations
+   - Support for irregular grids (curvilinear, unstructured)
+   - Chunking presets for common CMIP6/7 variables
+
+2. **Metadata Enhancement** (`src/dataforge/core/metadata.py`)
+   - Extract comprehensive CMIP6/CMIP7 metadata
+   - CF conventions compliance checking
+   - DRS (Data Reference Syntax) parsing
+   - Automatic dataset_id validation
+   - Provenance tracking (source files, processing date, Data-Forge version)
+   - Enhanced STAC metadata with CMIP attributes
+
+3. **Validation** (`src/dataforge/core/validation.py`)
+   - Pre-flight validation of input URLs
+   - Output path write permission checks
+   - NetCDF file structure validation
+   - Dimension compatibility checks for multi-file datasets
+   - Early failure detection
+
+4. **Error Handling**
+   - Detailed error messages with suggestions
+   - Graceful degradation (partial success scenarios)
+   - Retry logic for transient failures
+   - Error categorization (user error vs system error)
+
+5. **Monitoring & Observability** (`src/dataforge/monitoring/`)
+   - Basic Prometheus metrics:
+     - Jobs submitted, completed, failed
+     - Average job duration
+     - Files processed per second
+     - API request latency
+   - Structured logging (JSON logs)
+   - Job statistics dashboard data
+   - Health check enhancements
+
+6. **Performance Optimizations**
+   - Connection pooling for S3
+   - Caching for repeated metadata extraction
+   - Optimize Kerchunk inline threshold strategies
+   - Reduce memory footprint for large files
+
+7. **Testing**
+   - Test with various CMIP6 datasets and grids
+   - Validation logic tests
+   - Error handling tests
+   - Performance regression tests
+
+### Deliverables
+- ✅ Advanced conversion options and chunking strategies
+- ✅ Enhanced CMIP6/CMIP7 metadata support
+- ✅ Robust validation and error handling
+- ✅ Basic monitoring and metrics
+- ✅ Performance optimizations
+
+---
+
+## Stage 9: Compute Scheduler Integration + Kubernetes (Week 14-16)
+
+### Goals
+- Support external compute schedulers for HPC sites
+- Kubernetes deployment with Helm charts
+- Hybrid job routing (local vs remote compute)
+
+### Tasks
+1. **Scheduler Abstraction** (`src/dataforge/schedulers/`)
+   - Define scheduler interface (`BaseScheduler`)
+   - Implement `LocalScheduler` (current dramatiq-based)
+   - Implement `GlobusComputeScheduler`
+   - Implement `SlurmScheduler` (via SSH or REST API)
+   - Implement `PBSScheduler`
+
+2. **Globus Compute Integration**
+   - Set up Globus Compute endpoint configuration
+   - Submit functions to Globus Compute
+   - Monitor remote execution status
+   - Retrieve results from Globus Compute
+
+3. **HPC Scheduler Integration**
+   - SLURM job submission (sbatch)
+   - PBS job submission (qsub)
+   - Job status polling
+   - Handle queue wait times
+   - Resource specification (nodes, CPUs, memory, walltime)
+
+4. **Job Routing** (`src/dataforge/core/router.py`)
+   - Configuration-based routing rules
+   - Route by dataset size, user, priority
+   - Fallback to local if remote unavailable
+   - Load balancing across schedulers
+
+5. **Scheduler Configuration**
+   - Per-scheduler credentials and endpoints
+   - Queue/partition selection
+   - Resource templates for different job sizes
+   - Timeout and retry policies
+
+6. **Status Monitoring**
+   - Unified status across all schedulers
+   - Poll remote job status
+   - Update internal job state
+   - Handle scheduler-specific errors
+
+7. **Kubernetes Deployment**
+   - Create Helm chart for Data-Forge
+   - Deployments for API, workers, Redis
+   - ConfigMaps and Secrets
+   - Horizontal Pod Autoscaling for workers
+   - Ingress configuration
+   - Persistent volume claims (for Redis if needed)
+
+8. **Helm Chart** (`deployments/helm/`)
+   - Values.yaml for configuration
+   - Templates for all Kubernetes resources
+   - Support for multiple environments
+   - Documentation for Helm deployment
+
+9. **Testing**
+   - Test each scheduler implementation
+   - Test job routing logic
+   - Test failover scenarios
+   - Kubernetes deployment testing
+   - Load testing on Kubernetes
+
+10. **Documentation**
+    - Scheduler integration guide for each type
+    - Globus Compute setup instructions
+    - SLURM/PBS configuration examples
+    - Kubernetes deployment guide
+    - Helm chart documentation
+
+### Deliverables
+- ✅ Multi-scheduler support (Globus Compute, SLURM, PBS)
+- ✅ Intelligent job routing
+- ✅ Production-ready Kubernetes deployment
+- ✅ Helm chart for easy deployment
+- ✅ Comprehensive scheduler documentation
+
+---
+
+## Post-MVP / Stretch Goals
+
+### Stage 10: Web UI (Month 5-6) - STRETCH
+
+**Goals:** User-friendly web interface for job management and monitoring
+
+**Key Features:**
+- Dashboard with job overview and statistics
+- Job submission form with validation
+- Real-time job monitoring with progress
+- Catalog browser for published datasets
+- User profile and settings
+- Globus Auth integration for login
+
+**Tech Stack:** React/Vue + FastAPI static file serving or separate Nginx
+
+---
+
+### Stage 11: VirtualiZarr Support (Month 6) - STRETCH
+
+**Goals:** Add VirtualiZarr as alternative/complement to Kerchunk
+
+**Key Features:**
+- VirtualiZarr backend option for reference generation
+- Support Zarr v3 references
+- Comparison with Kerchunk outputs
+- Backend selection via API/CLI (`--backend virtualzarr`)
+
+**Integration:** Extends Stage 1 converter with new backend
+
+---
+
+### Stage 12: Kafka Consumer (Month 6) - STRETCH
+
+**Goals:** Event-driven job submission for integration with existing workflows
+
+**Key Features:**
+- Kafka consumer service (separate from main API)
+- Listen for dataset publication events
+- Auto-submit Kerchunk generation jobs
+- Dead letter queue for failed messages
+- Integration with ESGF publication workflows
+
+**Use Case:** Automatic Kerchunk generation when new datasets are published to ESGF
+
+---
+
+### Stage 13: MetaGrid Integration (Future) - STRETCH
+
+**Goals:** Integrate with MetaGrid for dataset discovery
+
+**Tasks:**
+- Research MetaGrid API
+- Publish dataset metadata to MetaGrid
+- Support MetaGrid search integration
+- Alternative/complement to STAC catalog
+
+---
+
+## Testing Strategy
+
+### Unit Tests
+- All core modules (converter, STAC, data sources, storage)
+- Scheduler implementations
+- CLI commands
+- Target: >80% code coverage
+
+### Integration Tests
+- API endpoints with authentication
+- Worker job processing end-to-end
+- STAC catalog publishing flow
+- Remote storage I/O (S3, HTTPS)
+- Globus Auth integration
+- Scheduler integration (with mocks)
+
+### End-to-End Tests
+- Complete workflows: submit → process → write to user storage → catalog
+- CLI workflows matching PRD examples
+- Multi-file conversion with various concat strategies
+- Error scenarios and recovery
+
+### Performance Tests
+- Benchmark datasets:
+  - Small: single file, <1GB
+  - Medium: 10-100 files, 1-10GB total
+  - Large: 100-1000+ files, 10-100GB+ total
+- Measure job throughput (jobs/hour)
+- Scalability: concurrent jobs (10, 50, 100)
+- Dask parallelization efficiency
+- API latency under load
+- Memory usage profiling
+
+### Security Tests
+- Authentication/authorization (Globus Auth)
+- Input validation and sanitization
+- SQL/command injection prevention
+- Credential handling (no leakage in logs/errors)
+- Output path traversal attacks
+- Rate limiting
+
+### CMIP6/CMIP7 Specific Tests
+- Test with real CMIP6 datasets from ESGF
+- Various variables (tas, pr, tos, etc.)
+- Different grid types and resolutions
+- Historical, scenario, and control experiments
+- CMIP7 datasets (as available)
+- Validate STAC metadata accuracy
+
+---
+
+## Documentation Plan
+
+### User Documentation
+- **Getting Started Guide**
+  - Installation (Docker Compose)
+  - First job submission
+  - Monitoring jobs
+  - Retrieving results
+  
+- **CLI Reference**
+  - All commands with examples from PRD
+  - Option descriptions
+  - Common workflows
+  
+- **API Reference**
+  - Auto-generated from OpenAPI spec
+  - Authentication guide
+  - Request/response examples
+  - Error codes
+  
+- **Tutorials**
+  - Converting CMIP6 datasets
+  - Batch job submission
+  - Publishing to STAC catalog
+  - Optimizing chunk strategies
+  
+- **FAQ**
+  - Common issues and solutions
+  - Performance tips
+  - Storage configuration
+
+### Developer Documentation
+- **Architecture Overview**
+  - System design
+  - Component interactions
+  - Data flow diagrams
+  - No internal storage architecture
+  
+- **Development Setup**
+  - Local development environment
+  - Running tests
+  - Contributing guidelines
+  
+- **Code Standards**
+  - Python style guide (Black, ruff)
+  - Type hints
+  - Docstring format
+  
+- **API Design**
+  - RESTful principles
+  - Versioning strategy
+  - Deprecation policy
+  
+- **Extension Points**
+  - Adding new schedulers
+  - Custom metadata extractors
+  - Storage backend plugins
+
+### Operational Documentation
+- **Deployment Guide**
+  - Docker Compose setup
+  - Kubernetes deployment with Helm
+  - Environment configuration
+  - Scaling strategies
+  
+- **Configuration Reference**
+  - All environment variables
+  - Redis configuration
+  - Dask cluster settings
+  - STAC catalog connection
+  - Globus Auth setup
+  
+- **Monitoring**
+  - Prometheus metrics
+  - Log aggregation
+  - Alerting setup
+  - Performance tuning
+  
+- **Troubleshooting**
+  - Common errors and fixes
+  - Job failure debugging
+  - Network/storage issues
+  - Performance problems
+  
+- **Security**
+  - Authentication configuration
+  - Credential management
+  - Network security
+  - Compliance considerations
+
+### ESGF-Specific Documentation
+- **ESGF Integration Guide**
+  - Accessing ESGF datasets
+  - STAC catalog publishing for CMIP6/7
+  - CMIP DRS conventions
+  - ESGF-NG roadmap alignment
+
+---
+
+## Risk Mitigation
+
+### Technical Risks
+
+| Risk | Impact | Mitigation |
+|------|--------|------------|
+| Large file processing failures | High | Streaming, chunked processing, Dask parallelization |
+| Memory exhaustion | High | Dask memory management, worker limits, spilling |
+| Network I/O bottlenecks | Medium | Connection pooling, async I/O, retries |
+| User storage permissions | High | Pre-flight validation, clear error messages |
+| STAC catalog downtime | Medium | Queue updates locally, retry with backoff |
+| Kerchunk library limitations | Medium | Stay current with upstream, contribute fixes |
+| S3 API rate limits | Medium | Exponential backoff, connection pooling |
+
+### Schedule Risks
+
+| Risk | Impact | Mitigation |
+|------|--------|------------|
+| ESGF-NG API changes | Medium | Regular sync with ESGF team, API versioning |
+| Dependency delays | Medium | Pin versions, vendor critical dependencies |
+| Feature creep | High | Strict MVP scope, defer stretch goals to post-launch |
+| Resource constraints | High | Prioritize features, adjust timeline, seek help |
+| Testing delays | Medium | Parallel testing with development, automate |
+
+### Integration Risks
+
+| Risk | Impact | Mitigation |
+|------|--------|------------|
+| STAC schema evolution | Medium | Version pinning, compatibility layer |
+| Globus Auth API changes | Low | Monitor release notes, SDK updates |
+| Scheduler API differences | Medium | Abstraction layer, test on target systems early |
+| CMIP7 metadata changes | Medium | Flexible metadata extraction, configurable templates |
+| User storage incompatibilities | High | Support major cloud providers, clear documentation |
+
+---
+
+## Success Metrics
+
+### MVP Success Criteria (Week 9)
+- [ ] Convert NetCDF files to Kerchunk references with Dask parallelization
+- [ ] API handles 50 concurrent jobs without degradation
+- [ ] Jobs write outputs to user-specified S3 paths successfully
+- [ ] STAC catalog updates succeed for CMIP6 datasets
+- [ ] Docker Compose deployment works on test system
+- [ ] CLI completes all workflows from PRD examples
+- [ ] No internal storage required (outputs to user paths only)
+- [ ] Documentation complete and reviewed
+- [ ] >80% test coverage
+
+### Post-MVP Metrics (Months 3-6)
+- **Usage Metrics**
+  - Jobs processed per day (target: 100+)
+  - Datasets cataloged per week
+  - Unique users/sites deployed (target: 5+ sites)
+  - Data volume processed (TB/month)
+
+- **Performance Metrics**
+  - Average job completion time by dataset size
+  - API response time p95 (target: <500ms)
+  - Worker throughput (files/hour)
+  - Dask speedup factor vs sequential
+
+- **Reliability Metrics**
+  - Job success rate (target: >95%)
+  - API uptime (target: 99.5%)
+  - STAC publication success rate (target: >98%)
+  - Mean time to recovery from failures
+
+- **User Satisfaction**
+  - User feedback score
+  - Documentation clarity rating
+  - Feature requests prioritization
+  - Community engagement (GitHub stars, issues, contributions)
+
+---
+
+## Timeline Summary - 4 Month Accelerated Plan
+
+| Stage | Duration | Weeks | Description | Parallelization Notes |
+|-------|----------|-------|-------------|----------------------|
+| 0 | 1 week | 1 | Project Setup | - |
+| 1 | 1 week | 2 | Core Conversion + Output Writing | - |
+| 2 | 2 weeks | 3-4 | Job Queue + API | - |
+| 3 | 1 week | 5 | Remote I/O (Input + Output) | ✓ Can overlap with Stage 4 |
+| 4 | 2 weeks | 6-7 | STAC Integration | ✓ Can overlap with Stage 3/5 |
+| 5 | 1 week | 8 | Dask Parallelization | ✓ Can overlap with Stage 4 |
+| 6 | 1 week | 9 | Docker + CLI Tool | - |
+| **MVP** | **9 weeks** | **~2.25 months** | **MVP Complete** | - |
+| 7 | 2 weeks | 10-11 | Globus Auth | ✓ Can overlap with Stage 8 |
+| 8 | 2 weeks | 12-13 | Advanced Features | ✓ Can overlap with Stage 7 |
+| 9 | 3 weeks | 14-16 | Schedulers + Kubernetes | - |
+| **Full** | **16 weeks** | **~4 months** | **Feature Complete** | - |
+
+### Post-Launch Stretch Goals (Months 5-6)
+| Stage | Description | Estimated Timeline |
+|-------|-------------|-------------------|
+| 10 | Web UI | 3-4 weeks |
+| 11 | VirtualiZarr Support | 2 weeks |
+| 12 | Kafka Consumer | 2 weeks |
+| 13 | MetaGrid Integration | TBD (depends on MetaGrid API) |
+
+### Key Acceleration Strategies
+
+**1. Parallel Development (2-3 developers)**
+- Weeks 5-8: Developer A on remote I/O + Dask, Developer B on STAC integration
+- Weeks 10-13: Developer A on Globus Auth, Developer B on advanced features
+- Weeks 14-16: All developers on scheduler integration and testing
+
+**2. Combined Stages**
+- Stage 1: Conversion + output writing together (natural dependency)
+- Stage 3: Input and output remote I/O in same stage
+- Stage 6: Docker + CLI delivered together (CLI uses API)
+
+**3. Focused MVP Scope**
+- Core conversion with Dask parallelization
+- User-managed storage (no internal storage complexity)
+- STAC publishing for CMIP6/7
+- Docker deployment (Kubernetes in Stage 9)
+- Essential CLI commands
+
+**4. Deferred to Post-MVP**
+- Web UI (API/CLI sufficient for launch)
+- VirtualiZarr (emerging, can add later)
+- Kafka consumer (nice-to-have)
+- Advanced monitoring dashboards
+- Full grid support (basic initially)
+- MetaGrid integration (evaluate post-launch)
+
+**5. Testing Integrated with Development**
+- Unit tests written alongside code
+- Integration tests run nightly
+- Performance benchmarks run weekly
+- CMIP6 test datasets prepared in Stage 0
+
+---
+
+## Next Steps
+
+1. **Stakeholder Review** (Week 0)
+   - Review and approve implementation plan
+   - Confirm timeline and resource allocation
+   - Identify CMIP6 test datasets
+   - Establish communication channels with ESGF-NG team
+
+2. **Project Kickoff** (Week 1, Stage 0)
+   - Set up repository and project structure
+   - Configure development environment
+   - Establish CI/CD pipeline
+   - Create project documentation site
+
+3. **ESGF Coordination** (Ongoing)
+   - Regular sync meetings with ESGF-NG STAC team
+   - Align on STAC schema for CMIP6/7
+   - Coordinate STAC catalog API access
+   - Share roadmap updates
+
+4. **Test Data Preparation** (Week 1-2)
+   - Identify representative CMIP6 datasets for testing
+   - Set up test S3 buckets or storage
+   - Prepare test STAC catalog instance
+   - Document test scenarios
+
+5. **Team Assignment** (Week 1)
+   - Assign developers to initial stages
+   - Identify specialists for Globus, STAC, HPC integration
+   - Set up sprint planning and standup meetings
+   - Establish code review process
+
+---
+
+## Appendix: Key Architectural Decisions
+
+### 1. No Internal Storage
+- **Decision:** Data-Forge does NOT store reference files internally
+- **Rationale:** Reduces operational complexity, storage costs, and scaling challenges
+- **Implication:** Users must provide accessible output paths (S3, web servers, etc.)
+
+### 2. Service-Level STAC Authentication
+- **Decision:** Service authenticates to STAC catalog, catalog is public read-only
+- **Rationale:** Simplifies user experience, enables public dataset discovery
+- **Implication:** Secure credential management for service, no per-user STAC credentials
+
+### 3. Dask for Job-Level Parallelization
+- **Decision:** Use Dask within each job to parallelize multi-file processing
+- **Rationale:** Significant speedup for large datasets, Python-native, flexible
+- **Implication:** Additional memory and cluster management complexity
+
+### 4. Dramatiq + Redis for Job Queue
+- **Decision:** Dramatiq with Redis backend for MVP job scheduling
+- **Rationale:** Simple, reliable, good enough for single-node deployments
+- **Future:** May extend with Celery or cloud-native queues for large-scale deployments
+
+### 5. Modular Scheduler Architecture
+- **Decision:** Abstract scheduler interface supporting local, Globus Compute, SLURM, PBS
+- **Rationale:** Flexibility for different deployment environments (cloud, HPC, hybrid)
+- **Implication:** Additional development and testing for each scheduler type
+
+### 6. CLI-First User Experience
+- **Decision:** CLI tool as primary user interface for MVP
+- **Rationale:** Data publishers are technical users comfortable with command-line tools
+- **Future:** Web UI as stretch goal for broader adoption
