@@ -7,7 +7,7 @@
 * **Name:** Data-Forge (working title)  
 * **Primary Purpose:** To generate reference files (starting with Kerchunk) and update/provide catalogs for users, streamlining data access and management for climate datasets.  
 * **Target Users:** Data publishers  
-* **Provides:** An asynchronous service to generate reference files (Kerchunk to start) and publish to STAC catalogs, enabling data publishers to create and catalog reference files at sites that lack job schedulers or dedicated compute resources
+* **Provides:** An asynchronous service to generate reference files (Kerchunk to start) and (optionally) upload them and attach them as assets on existing STAC Items, enabling data publishers to create and catalog reference files at sites that lack job schedulers or dedicated compute resources
 
 ---
 
@@ -31,7 +31,7 @@
 
 1. **Submit Reference File Generation Jobs:** *"As a data publisher, I want to submit asynchronous jobs to generate Kerchunk reference files from my NetCDF datasets, so I can provide efficient access to large datasets without blocking my workflow."*
 
-2. **Publish to STAC Catalogs:** *"As a data publisher, I want to automatically publish generated Kerchunk reference files to STAC catalogs, so that users can discover and access my datasets through standard catalog interfaces."*
+2. **Update STAC Catalog Assets:** *"As a data publisher, I want the service to upload generated Kerchunk reference files and update an existing STAC Item to include them as assets, so that users can discover and access my datasets through standard catalog interfaces."*
 
 3. **Monitor Job Progress:** *"As a data publisher, I want to monitor the status and progress of my reference file generation jobs, so I can track completion and troubleshoot any issues."*
 
@@ -46,8 +46,8 @@
 ### **Workflows**
 
 * **Input:** Large/multiple NetCDF files.  
-* **Process:** Generate Kerchunk reference files and catalog the outputs.  
-* **Output:** Kerchunk reference files and updated catalogs for easy discovery and access.
+* **Process:** Generate Kerchunk reference files and (optionally) upload + update STAC assets.  
+* **Output:** Kerchunk reference files and updated STAC catalog assets for easy discovery and access.
 
 ---
 
@@ -59,7 +59,7 @@
      * Support chunk strategy: which dimensions  
      * Different grids  
   2. Provide Kerchunk reference files for download or direct access.  
-  3. Register Kerchunk reference files as STAC item assets in ESGF-NG STAC catalog.  
+  3. Upload Kerchunk reference files (optional) and update an existing STAC Item to include them as assets in the ESGF-NG STAC catalog.  
   4. API access (REST API and CLI tool).  
   5. Asynchronous job monitoring and status tracking.  
 * **Integrations:**
@@ -73,7 +73,7 @@
   2. Submit job with desired data via publicly accessible links (S3 store, HTTPS from ESGF catalog, etc).  
   3. Monitor job progress and status.  
   4. System converts files to Kerchunk reference files asynchronously.  
-  5. System automatically publishes Kerchunk reference files to ESGF-NG STAC catalog.  
+  5. Optional: System uploads Kerchunk reference files and updates an existing STAC Item to include them as assets in ESGF-NG STAC catalog.  
   6. Optional: Download reference files for validation or local use.
 
 ---
@@ -85,6 +85,9 @@
   * Fast reference file generation for large datasets.  
   * Quick catalog update times.  
   * Efficient job queue processing with minimal latency.  
+* **Reliability:**
+
+  * Retries with exponential backoff (and jitter) for transient failures during upload and STAC updates (e.g., timeouts, 429, 5xx).  
 * **Security and Compliance:**
 
   * API access control managed via Globus Auth.  
@@ -110,16 +113,16 @@
     * Dask for job-level parallelization  
   * Authentication: Globus Auth SDK.  
   * Catalog: STAC API client for ESGF-NG STAC catalog.  
-    * Service uses configured credentials/API tokens to publish STAC items  
-  * Storage: User-provided storage locations (S3, HTTPS-accessible endpoints).  
-    * Data-Forge writes reference files to user-specified output paths  
-    * No internal storage; users manage their own file storage infrastructure  
+    * Service uses configured credentials/API tokens to update existing STAC Items (asset patching)  
+  * Storage: User-provided storage locations (S3 and local filesystem).  
+    * Data-Forge writes reference files to user-specified output paths (local or S3)  
+    * In "ESGF publish" mode, Data-Forge uploads the reference file via a server-configured publishing endpoint and patches STAC to reference the uploaded URL  
   * Containerization: Docker.  
   * Deployment: Docker-compose (single node), Helm charts (Kubernetes).
 * **Integrations:**
 
   * Globus Auth (API authentication).  
-  * ESGF-NG STAC catalog (publishing generated reference files).  
+  * ESGF-NG STAC catalog (updating existing Items with generated reference file assets).  
   * Dramatiq + Redis (MVP: local asynchronous job scheduling).  
   * Compute schedulers (Stretch: Globus Compute, Slurm, PBS, etc).
 
@@ -133,7 +136,7 @@
     * REST API with Globus Auth authentication  
     * CLI tool for job submission and monitoring  
     * Kerchunk reference file generation (NetCDF support)  
-    * Automatic publishing to ESGF-NG STAC catalog  
+    * Optional: ESGF publish (upload) and STAC Item asset update  
     * Local dramatiq + Redis job scheduling  
   * **Stretch Goals:**  
     * Compute/scheduler integration (Globus Compute, Slurm, PBS)  
@@ -152,8 +155,9 @@
 * **Dependencies:**
 
   * Globus Auth for API authentication.  
-  * User-provided storage infrastructure (S3 buckets, web servers, etc).  
+  * User-provided storage infrastructure (S3 buckets and/or local filesystem access).  
   * ESGF-NG STAC catalog API access (requires service credentials).  
+  * ESGF publishing endpoint API access (requires service credentials).  
   * ESGF NG: design docs   
     * https://github.com/ESGF/esgf-roadmap/  
   * STAC compliance and schema updates.  
@@ -208,12 +212,20 @@ Job submitted successfully!
 Job ID: job-xyz789-uvw012
 Status: queued
 
-# Skip STAC publishing (reference file generation only)
+# Write to local filesystem
 $ data-forge submit \
   --input "s3://my-data/dataset/*.nc" \
   --dataset-id "my.dataset.id" \
-  --output-path "s3://kerchunk-refs/my-dataset/" \
-  --no-publish
+  --output-path "./kerchunk_refs/"
+
+# ESGF publish (upload + update existing STAC Item asset)
+$ data-forge submit \
+  --input "s3://my-data/dataset/*.nc" \
+  --dataset-id "my.dataset.id" \
+  --esgf-publish \
+  --stac-collection-id "cmip6" \
+  --stac-item-id "my.dataset.id" \
+  --stac-asset-key kerchunk_reference
 ```
 
 #### **Monitor Job Status**
@@ -268,7 +280,7 @@ STAC Item ID: CMIP6.CMIP.NCAR.CESM2.historical.Amon.tas
 Catalog: https://esgf-stac.llnl.gov/
 Published: 2026-02-13 10:45:30 UTC
 Assets:
-  - kerchunk_reference: s3://kerchunk-refs/.../tas.json
+  - kerchunk_reference: https://esgf-publish.example.org/kerchunk/.../tas.json
 ```
 
 #### **Batch Job Submission**

@@ -1,7 +1,7 @@
 # Data-Forge Implementation Plan
 
 ## Overview
-This document outlines a staged approach to building Data-Forge, a service for generating Kerchunk reference files and managing catalogs for climate datasets. **Key Architecture**: Data-Forge is a compute service that writes reference files directly to user-specified storage locations (S3, HTTPS-accessible endpoints, etc.). The service does NOT provide internal storage; users manage their own file storage infrastructure.
+This document outlines a staged approach to building Data-Forge, a service for generating Kerchunk reference files and managing catalogs for climate datasets. **Key Architecture**: Data-Forge is a compute service that writes reference files directly to user-specified storage locations (S3 or local filesystem), or uploads them via an ESGF publishing endpoint and then updates existing STAC Item assets. The service does NOT provide internal storage; users manage their own file storage infrastructure.
 
 ---
 
@@ -61,7 +61,8 @@ This document outlines a staged approach to building Data-Forge, a service for g
 ### Goals
 - Implement basic Kerchunk conversion functionality
 - Support single file and multi-file conversion
-- Support writing to remote storage locations
+- Support writing to local filesystem and S3
+- Support ESGF publish (upload + STAC asset update)
 
 ### Tasks
 1. **Conversion Module** (`src/dataforge/core/converter.py`)
@@ -69,23 +70,26 @@ This document outlines a staged approach to building Data-Forge, a service for g
    - Support single NetCDF file conversion
    - Support multi-file conversion with concatenation along specified dimensions
    - Handle different chunk strategies
-   - Write output directly to user-specified paths (S3, local, etc.)
+   - Write output to one configured destination: local, S3, or ESGF publish (upload + STAC asset update)
    - Basic error handling and logging
 
 2. **Storage Writer** (`src/dataforge/core/storage.py`)
-   - Implement fsspec-based output writer
+   - Implement fsspec-based output writer (DI-friendly interface + concrete implementations)
    - Support writing to S3 (s3://)
    - Support writing to local filesystem
-   - Support HTTPS PUT if needed (for object storage)
    - Handle authentication for output destinations
+   - Provide an ESGF publish output implementation that uploads JSON and returns a stable href for STAC
 
 3. **Configuration** (`src/dataforge/models/config.py`)
-   - Define conversion configuration model:
-     - inline_threshold (default: 300)
-     - concat_dims (e.g., ['time'])
-     - identical_dims (e.g., ['lat', 'lon', 'lat_bnds', 'lon_bnds'])
-     - output_path (required: user-specified destination)
-     - publish_to_stac (boolean, default: true)
+    - Define conversion configuration model:
+      - inline_threshold (default: 300)
+      - concat_dims (e.g., ['time'])
+      - identical_dims (e.g., ['lat', 'lon', 'lat_bnds', 'lon_bnds'])
+      - output_mode (one of: local, s3, esgf_publish)
+      - output_path (required for local and s3 output)
+      - stac_collection_id (required for esgf_publish)
+      - stac_item_id (required for esgf_publish)
+      - stac_asset_key (default: kerchunk_reference)
 
 4. **Testing**
    - Unit tests for converter
@@ -117,42 +121,45 @@ This document outlines a staged approach to building Data-Forge, a service for g
 
 2. **Job Models** (`src/dataforge/models/job.py`)
    - Define job data structures:
-     ```python
-     class JobSubmission:
-         input_files: List[str]  # S3, HTTPS, OpenDAP URLs
-         dataset_id: str
-         output_path: str  # User-specified S3/storage path
-         concat_dims: List[str] = ['time']
-         identical_dims: Optional[List[str]]
-         inline_threshold: int = 300
-         metadata: Optional[Dict[str, Any]]
-         publish_to_stac: bool = True
-         
-     class Job:
-         id: str  # job-{uuid}
-         status: JobStatus
-         submission: JobSubmission
-         created_at: datetime
-         started_at: Optional[datetime]
-         completed_at: Optional[datetime]
-         updated_at: datetime
-         progress: Optional[JobProgress]  # files processed / total
-         error_message: Optional[str]
-         result_url: Optional[str]  # Points to user's output_path
-     ```
+      ```python
+      class JobSubmission:
+          input_files: List[str]  # S3, HTTPS, OpenDAP URLs
+          dataset_id: str
+          output_mode: str  # one of: local, s3, esgf_publish
+          output_path: Optional[str]  # required for local/s3, unused for esgf_publish
+          stac_collection_id: Optional[str]  # required for esgf_publish
+          stac_item_id: Optional[str]  # required for esgf_publish
+          stac_asset_key: str = "kerchunk_reference"
+          concat_dims: List[str] = ['time']
+          identical_dims: Optional[List[str]]
+          inline_threshold: int = 300
+          metadata: Optional[Dict[str, Any]]
+
+      class Job:
+          id: str  # job-{uuid}
+          status: JobStatus
+          submission: JobSubmission
+          created_at: datetime
+          started_at: Optional[datetime]
+          completed_at: Optional[datetime]
+          updated_at: datetime
+          progress: Optional[JobProgress]  # files processed / total
+          error_message: Optional[str]
+          result_url: Optional[str]  # Output path or published href (mode-dependent)
+      ```
 
 3. **Worker Implementation** (`src/dataforge/workers/converter_worker.py`)
    - Create dramatiq actor for conversion
    - Integrate with Stage 1 converter
    - Handle job lifecycle and state updates
-   - Write reference files directly to user-specified output_path
+   - Write reference files to the configured output destination (local, S3, or ESGF publish)
    - Store job metadata only in Redis (NOT the reference files)
    - Update job progress (files processed / total)
 
 4. **Job Storage**
    - Redis for job metadata and status only
-   - No internal file storage - all outputs go to user paths
-   - Job results contain URL/path to user's storage location
+   - No internal file storage - outputs go to the configured destination
+   - Job results contain output path or published href (mode-dependent)
 
 5. **API Structure** (`src/dataforge/api/`)
    - Set up FastAPI application
@@ -161,10 +168,10 @@ This document outlines a staged approach to building Data-Forge, a service for g
    - Configure OpenAPI/Swagger docs
 
 6. **Core Endpoints**
-   - `POST /api/v1/jobs` - Submit conversion job (requires output_path)
+   - `POST /api/v1/jobs` - Submit conversion job (requires output_mode; requires output_path for local/s3)
    - `GET /api/v1/jobs/{job_id}` - Get job status and progress
    - `GET /api/v1/jobs` - List jobs (with pagination, filtering by status)
-   - `GET /api/v1/jobs/{job_id}/result` - Get result URL (user's output path)
+   - `GET /api/v1/jobs/{job_id}/result` - Get result URL/path/href (mode-dependent)
    - `DELETE /api/v1/jobs/{job_id}` - Cancel job (if queued/running)
 
 7. **Request/Response Models** (`src/dataforge/models/api.py`)
@@ -209,10 +216,10 @@ This document outlines a staged approach to building Data-Forge, a service for g
    - Extend storage writer from Stage 1
    - **MVP**: Support S3 output with proper credentials
    - **MVP**: Support local filesystem output
+   - **MVP**: Support ESGF publish output (server-configured upload + STAC asset update)
    - Handle S3 authentication (AWS credentials)
    - Verify write permissions before job execution
    - Generate S3 URLs for results
-   - **Post-MVP**: HTTPS PUT/POST for other object storage
 
 3. **Enhanced Converter**
    - Modify converter to work with remote input sources
@@ -244,65 +251,70 @@ This document outlines a staged approach to building Data-Forge, a service for g
 - ✅ Remote input data source support (S3, HTTPS, OpenDAP)
 - ✅ S3 output destination support (MVP)
 - ✅ Local filesystem output support (MVP)
+- ✅ ESGF publish output support (MVP)
 - ✅ Authentication handling for S3 input/output
-- 📋 HTTPS PUT/POST output (deferred post-MVP)
 
 ---
 
 ## Stage 4: STAC Catalog Integration (Week 6-7)
 
 ### Goals
-- Implement STAC item generation from Kerchunk outputs
-- Publish to server-configured STAC catalog (ESGF-NG)
+- Update existing STAC Items with new Kerchunk reference assets
+- Support ESGF publish (upload + required STAC asset update)
 - **Security Model**: Single catalog configured server-side (prevents abuse)
 - Service authenticates to catalog; catalog is public read-only
 
 ### Tasks
 1. **STAC Module** (`src/dataforge/core/stac.py`)
-   - Implement STAC Item generation from job metadata
-   - Create Kerchunk reference as STAC asset (pointing to user's output_path)
-   - Extract STAC metadata from NetCDF (CF conventions, CMIP6/7 metadata)
-   - Support CMIP6/CMIP7 specific metadata fields
-   - Generate STAC Item ID from dataset_id
+   - Implement STAC Item asset patching for an existing Item
+   - Add/replace a single asset (default key: kerchunk_reference) with the Kerchunk JSON href
+   - Require explicit target: stac_collection_id + stac_item_id
 
 2. **STAC API Client** (`src/dataforge/core/stac_client.py`)
-   - Create client for ESGF-NG STAC API
-   - Implement POST to catalog endpoint (create item)
-   - Implement PUT/PATCH for updates
-   - Handle service authentication (API token/credentials)
-   - **Note**: Service authenticates to publish; catalog is public read-only for users
-   - Error handling and retry logic
+    - Create client for ESGF-NG STAC API
+    - Implement GET + PATCH/PUT for updating an existing Item's assets
+    - Handle service authentication (API token/credentials)
+    - **Note**: Service authenticates to publish; catalog is public read-only for users
+    - Error handling and retry logic (exponential backoff + jitter)
+    - Retry on transient failures (timeouts/connection errors, 429, 5xx)
+    - Fail fast on hard failures (400, 401/403, 404)
 
-3. **STAC Configuration** (Server-Side Only)
-   - **MVP Security**: Single catalog endpoint configured in server environment
-   - STAC catalog base URL (admin-configured, not user-provided)
-   - Service credentials/API tokens (stored securely, never exposed to users)
-   - Collection ID for CMIP6/CMIP7
-   - Metadata templates
-   - **Rationale**: Prevents bad actors from publishing to arbitrary catalogs
+3. **ESGF Publisher** (`src/dataforge/core/esgf_publisher.py`)
+   - Implement upload of the generated Kerchunk JSON
+   - Return a stable, externally-resolvable href for use in the STAC asset
+   - Server-configured endpoint and credentials (not per-job)
+   - Error handling and retry logic (exponential backoff + jitter)
 
-4. **Worker Updates**
-   - After successful conversion, publish to STAC if enabled
-   - Handle STAC publication failures gracefully
-   - Update job status with STAC publication result
+4. **Publishing + STAC Configuration** (Server-Side Only)
+   - **MVP Security**: Server-configured STAC base URL + service credential/token
+   - Server-configured ESGF publish endpoint + service credential/token
+   - Optional allow-list for collections that may be updated
+   - **Rationale**: Prevents bad actors from publishing to arbitrary catalogs/endpoints
 
-5. **API Endpoints**
-   - Enhance `POST /api/v1/jobs` with `publish_to_stac` option
-   - `GET /api/v1/jobs/{job_id}/stac` - Retrieve STAC item if published
-   - Link to public STAC catalog entry
+5. **Worker Updates**
+   - If output_mode == esgf_publish:
+     - Upload Kerchunk JSON via ESGF publisher
+     - Patch the target STAC Item to add/replace the configured asset
+   - STAC update is required in esgf_publish mode: if it fails after retries, the job fails
+   - Record publication results (asset href, timestamps, failure reason)
 
-6. **Testing**
-   - Unit tests for STAC item generation
-   - Integration tests with mock STAC API
-   - Test CMIP6/CMIP7 metadata extraction
-   - Test catalog publication flow
-   - Test fallback when STAC unavailable
+6. **API Endpoints**
+   - Enhance `POST /api/v1/jobs` with output mode selection
+   - Require `stac_collection_id` and `stac_item_id` when output_mode == esgf_publish
+   - `GET /api/v1/jobs/{job_id}/stac` - Retrieve STAC target + asset href (if published)
+
+7. **Testing**
+   - Unit tests for STAC item asset patching
+   - Unit tests for ESGF publisher upload
+   - Integration tests with mock STAC API (including 429/5xx retry behavior)
+   - Integration tests for end-to-end: generate -> upload -> patch STAC
 
 ### Deliverables
-- ✅ STAC item generation with Kerchunk asset
+- ✅ STAC Item asset updates for existing Items
+- ✅ Retries/backoff for upload + STAC update
 - ✅ Server-configured STAC catalog integration (secure)
+- ✅ Server-configured ESGF publish integration (secure)
 - ✅ Service-level authentication to catalog (credentials never exposed)
-- ✅ CMIP6/CMIP7 metadata support
 - ✅ STAC integration tests
 - 🔒 Security: Centralized catalog control prevents malicious publications
 
@@ -814,8 +826,8 @@ These features are valuable but not required for initial launch. They can be pri
 ### Integration Tests
 - API endpoints with authentication
 - Worker job processing end-to-end
-- STAC catalog publishing flow
-- Remote storage I/O (S3, HTTPS)
+- STAC catalog asset update flow
+- Remote I/O (S3 output, HTTPS/S3/OpenDAP input)
 - Globus Auth integration
 - Scheduler integration (with mocks)
 
@@ -947,7 +959,7 @@ These features are valuable but not required for initial launch. They can be pri
 ### ESGF-Specific Documentation
 - **ESGF Integration Guide**
   - Accessing ESGF datasets
-  - STAC catalog publishing for CMIP6/7
+  - STAC catalog asset updates for CMIP6/7
   - CMIP DRS conventions
   - ESGF-NG roadmap alignment
 
@@ -1060,7 +1072,6 @@ These criteria are already captured in the "MVP COMPLETE" section above. Refer t
 - Web UI for broader adoption - 4-6 weeks
 - VirtualiZarr support - 2-3 weeks
 - Kafka consumer for event-driven workflows - 2-3 weeks
-- HTTPS PUT/POST output destinations (beyond S3)
 - MetaGrid integration - TBD
 
 **4. Testing Throughout Development**

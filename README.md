@@ -6,8 +6,8 @@ Data-Forge is an asynchronous service for generating reference files (starting w
 
 - Asynchronous job handling and monitoring
 - Kerchunk reference file generation (NetCDF to Zarr references)
-- User-specified output paths (S3, HTTPS, local filesystem)
-- Automatic STAC catalog publishing (ESGF-NG integration)
+- Kerchunk output: local filesystem, S3, or ESGF publish (upload + STAC asset update)
+- Update existing STAC items with new Kerchunk assets (ESGF-NG integration)
 - REST API and CLI for job submission and tracking
 - Robust support for remote/cloud data sources
 - Secure authentication with Globus Auth
@@ -36,6 +36,16 @@ $ data-forge submit \
   --output-path "s3://my-refs-bucket/output/" \
   --metadata '{"project": "CMIP6"}'
 
+# Submit a job and publish to ESGF (upload + update existing STAC Item asset)
+$ data-forge submit \
+  --input "s3://my-bucket/dataset/*.nc" \
+  --dataset-id "CMIP6.Project.Inst.Model.Experiment.Variable" \
+  --concat-dims time \
+  --esgf-publish \
+  --stac-collection-id "cmip6" \
+  --stac-item-id "CMIP6.Project.Inst.Model.Experiment.Variable" \
+  --stac-asset-key kerchunk_reference
+
 # Monitor job progress
 $ data-forge status <job-id> --watch
 
@@ -50,8 +60,9 @@ $ data-forge download <job-id> --output ./local_refs/
 - **Job Queue:** Dramatiq + Redis (asynchronous processing)
 - **Workers:** Process Kerchunk conversion, Dask parallelization, write outputs directly to user location
 - **STAC Integration:** Optional, for automatic catalog publishing (ESGF-NG, server-authenticated)
+- **ESGF Publish:** Optional, for uploading artifacts and patching existing STAC Item assets (server-authenticated)
 - **Authentication:** Globus Auth (OAuth2), user-scoped job management
-- **No Internal Storage:** Reference files always stored in user-specified outputs (e.g., S3 or HTTPS endpoints)
+- **No Internal Storage:** Reference files are written to local/S3, or uploaded via ESGF publish (service-managed)
 
 ## Deployment
 
@@ -71,4 +82,3 @@ See the [`docs/`](docs/) directory for:
 ---
 
 Data-Forge aims to make FAIR, cloud-optimized data publishing simple and scalable for the global climate data community.
-
