@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -8,11 +7,10 @@ from dataforge.job_store.base import is_allowed_transition
 from dataforge.models.job import Job, JobStatus, JobSubmission
 
 
-@dataclass
 class FakeJobStore:
     """In-memory JobStore implementation for unit tests."""
 
-    def __post_init__(self) -> None:
+    def __init__(self) -> None:
         self._jobs: dict[str, Job] = {}
         self._created_order: list[str] = []
 
@@ -74,7 +72,10 @@ class FakeJobStore:
         completed_at = job.completed_at
         if new == JobStatus.RUNNING and started_at is None:
             started_at = now
-        if new in (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED):
+        if (
+            new in (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED)
+            and completed_at is None
+        ):
             completed_at = now
 
         job = job.model_copy(
