@@ -33,8 +33,12 @@ class JobSubmission(BaseModel):
         if not v:
             raise ValueError("input_files must be non-empty")
         for item in v:
+            if not item:
+                raise ValueError("Stage 2 supports local inputs only")
             p = urlparse(item)
             if p.scheme and p.scheme != "file":
+                raise ValueError("Stage 2 supports local inputs only")
+            if not p.scheme and p.netloc:
                 raise ValueError("Stage 2 supports local inputs only")
             if p.scheme == "file" and p.netloc not in ("", "localhost"):
                 raise ValueError("Stage 2 supports local inputs only")
@@ -51,8 +55,14 @@ class JobSubmission(BaseModel):
 
     @model_validator(mode="after")
     def _validate_output_mode_path(self) -> "JobSubmission":
+        if not self.output_path:
+            raise ValueError("output_path must be non-empty")
         if self.output_mode == "s3" and not self.output_path.startswith("s3://"):
             raise ValueError("output_path must be an s3:// URL when output_mode is s3")
+        if self.output_mode == "s3":
+            p = urlparse(self.output_path)
+            if not p.netloc:
+                raise ValueError("output_path must include an S3 bucket")
         if self.output_mode == "local" and self.output_path.startswith("s3://"):
             raise ValueError(
                 "output_path must be a local path when output_mode is local"
