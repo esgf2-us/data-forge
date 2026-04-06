@@ -38,9 +38,11 @@ def run_job(store: JobStore, job_id: str) -> None:
 
     try:
         store.set_status(job_id, expected=JobStatus.QUEUED, new=JobStatus.RUNNING)
-    except ValueError:
+    except ValueError as e:
         # Another worker or a cancel beat us.
-        return
+        if "status mismatch" in str(e):
+            return
+        raise
 
     submission = store.get(job_id).submission
     total = len(submission.input_files)
@@ -84,9 +86,10 @@ def run_job(store: JobStore, job_id: str) -> None:
             store.set_status(
                 job_id, expected=JobStatus.RUNNING, new=JobStatus.COMPLETED
             )
-        except ValueError:
-            # Likely cancelled concurrently.
-            return
+        except ValueError as e:
+            if "status mismatch" in str(e):
+                return
+            raise
     except Exception as e:
         if store.get(job_id).status == JobStatus.CANCELLED:
             return
@@ -98,8 +101,10 @@ def run_job(store: JobStore, job_id: str) -> None:
                 store.set_status(
                     job_id, expected=JobStatus.RUNNING, new=JobStatus.FAILED
                 )
-            except ValueError:
-                return
+            except ValueError as e:
+                if "status mismatch" in str(e):
+                    return
+                raise
 
 
 dramatiq.set_broker(RedisBroker(url=redis_broker_url()))
