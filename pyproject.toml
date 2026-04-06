@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "data-forge"
+version = "0.1.0"
+description = "Asynchronous service for generating Kerchunk reference files"
+authors = ["Jason Boutte <boutte3@llnl.gov>"]
+license = "MIT"
+packages = [{ include = "dataforge", from = "src" }]
+
+[tool.poetry.dependencies]
+python = ">=3.13,<3.15"
+
+# Stage 1
+pydantic = "^2.0"
+fsspec = "^2025.0"
+s3fs = "^2025.0"
+kerchunk = "^0.2"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0"
+
+[build-system]
+requires = ["poetry-core>=1.6"]
+build-backend = "poetry.core.masonry.api"
