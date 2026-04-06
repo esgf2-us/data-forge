@@ -6,8 +6,6 @@ from dataforge.models.job import Job, JobStatus, JobSubmission
 
 
 def is_allowed_transition(old: JobStatus, new: JobStatus) -> bool:
-    if old == new:
-        return True
     if old == JobStatus.QUEUED and new in (JobStatus.RUNNING, JobStatus.CANCELLED):
         return True
     if old == JobStatus.RUNNING and new in (
@@ -20,9 +18,16 @@ def is_allowed_transition(old: JobStatus, new: JobStatus) -> bool:
 
 
 def terminal_status_precedence(a: JobStatus, b: JobStatus) -> JobStatus:
-    # CANCELLED wins over COMPLETED/FAILED if observed at checkpoint.
-    if a == JobStatus.CANCELLED or b == JobStatus.CANCELLED:
-        return JobStatus.CANCELLED
+    # Used for checkpoint decisions: if either side observed CANCELLED, it wins.
+    rank = {
+        JobStatus.FAILED: 1,
+        JobStatus.COMPLETED: 2,
+        JobStatus.CANCELLED: 3,
+    }
+    if a == b:
+        return a
+    if a in rank and b in rank:
+        return a if rank[a] >= rank[b] else b
     return a
 
 
