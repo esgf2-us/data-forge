@@ -36,6 +36,8 @@ class JobSubmission(BaseModel):
             p = urlparse(item)
             if p.scheme and p.scheme != "file":
                 raise ValueError("Stage 2 supports local inputs only")
+            if p.scheme == "file" and p.netloc not in ("", "localhost"):
+                raise ValueError("Stage 2 supports local inputs only")
         return v
 
 

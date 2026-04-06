@@ -24,3 +24,14 @@ def test_job_submission_rejects_remote_input_scheme() -> None:
             output_mode="local",
             output_path="/tmp/out",
         )
+
+
+def test_job_submission_rejects_file_uri_with_host() -> None:
+    from dataforge.models.job import JobSubmission
+
+    with pytest.raises(ValueError, match="local inputs only"):
+        JobSubmission(
+            input_files=["file://example.com/tmp/a.nc"],
+            output_mode="local",
+            output_path="/tmp/out",
+        )
