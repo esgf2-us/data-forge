@@ -31,18 +31,20 @@ def run_job(store: JobStore, job_id: str) -> None:
     """
 
     job = store.get(job_id)
-    if job.status == JobStatus.CANCELLED:
+    if job.status in (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED):
+        return
+    if job.status == JobStatus.RUNNING:
         return
 
     try:
         store.set_status(job_id, expected=JobStatus.QUEUED, new=JobStatus.RUNNING)
-    except Exception:
-        # Cancellation takes precedence over all other terminal outcomes.
-        if store.get(job_id).status == JobStatus.CANCELLED:
-            return
-        raise
+    except ValueError:
+        # Another worker or a cancel beat us.
+        return
 
-    store.set_progress(job_id, done=0, total=1)
+    submission = store.get(job_id).submission
+    total = len(submission.input_files)
+    store.set_progress(job_id, done=0, total=total)
 
     try:
         submission = store.get(job_id).submission
@@ -66,7 +68,7 @@ def run_job(store: JobStore, job_id: str) -> None:
         if store.get(job_id).status == JobStatus.CANCELLED:
             return
 
-        store.set_progress(job_id, done=1, total=1)
+        store.set_progress(job_id, done=total, total=total)
 
         result_url = str(output_uri)
         if submission.output_mode == "local":
@@ -78,7 +80,13 @@ def run_job(store: JobStore, job_id: str) -> None:
         if store.get(job_id).status == JobStatus.CANCELLED:
             return
 
-        store.set_status(job_id, expected=JobStatus.RUNNING, new=JobStatus.COMPLETED)
+        try:
+            store.set_status(
+                job_id, expected=JobStatus.RUNNING, new=JobStatus.COMPLETED
+            )
+        except ValueError:
+            # Likely cancelled concurrently.
+            return
     except Exception as e:
         if store.get(job_id).status == JobStatus.CANCELLED:
             return
@@ -86,7 +94,12 @@ def run_job(store: JobStore, job_id: str) -> None:
         store.set_error(job_id, str(e))
         cur = store.get(job_id)
         if cur.status == JobStatus.RUNNING:
-            store.set_status(job_id, expected=JobStatus.RUNNING, new=JobStatus.FAILED)
+            try:
+                store.set_status(
+                    job_id, expected=JobStatus.RUNNING, new=JobStatus.FAILED
+                )
+            except ValueError:
+                return
 
 
 dramatiq.set_broker(RedisBroker(url=redis_broker_url()))
