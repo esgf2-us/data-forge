@@ -245,14 +245,24 @@ class RedisJobStore(JobStore):
         return jobs, next_cursor
 
     def set_status(self, job_id: str, expected: JobStatus, new: JobStatus) -> Job:
-        res = self._set_status(
-            keys=[
-                f"job:{job_id}",
-                f"jobs:status:{expected.value}",
-                f"jobs:status:{new.value}",
-            ],
-            args=[job_id, expected.value, new.value, str(_ms(_now()))],
-        )
+        try:
+            res = self._set_status(
+                keys=[
+                    f"job:{job_id}",
+                    f"jobs:status:{expected.value}",
+                    f"jobs:status:{new.value}",
+                ],
+                args=[job_id, expected.value, new.value, str(_ms(_now()))],
+            )
+        except redis.ResponseError as e:
+            msg = str(e)
+            if "not_found" in msg:
+                raise KeyError(job_id) from e
+            if "transition_not_allowed" in msg:
+                raise ValueError(
+                    f"job {job_id} transition not allowed: {expected.value} -> {new.value}"
+                ) from e
+            raise
 
         # Lua returns: [1, new] on success, [0, cur] on mismatch, or error.
         if isinstance(res, list) and res and int(res[0]) == 1:
@@ -301,15 +311,23 @@ class RedisJobStore(JobStore):
         return self.get(job_id)
 
     def cancel(self, job_id: str) -> Job:
-        res = self._cancel(
-            keys=[
-                f"job:{job_id}",
-                "jobs:status:queued",
-                "jobs:status:running",
-                "jobs:status:cancelled",
-            ],
-            args=[job_id, str(_ms(_now()))],
-        )
+        try:
+            res = self._cancel(
+                keys=[
+                    f"job:{job_id}",
+                    "jobs:status:queued",
+                    "jobs:status:running",
+                    "jobs:status:cancelled",
+                ],
+                args=[job_id, str(_ms(_now()))],
+            )
+        except redis.ResponseError as e:
+            msg = str(e)
+            if "not_found" in msg:
+                raise KeyError(job_id) from e
+            if "transition_not_allowed" in msg:
+                raise ValueError(f"job {job_id} transition not allowed") from e
+            raise
 
         # Lua returns: [1, 'cancelled'] if changed, [0, cur] if already terminal.
         if isinstance(res, list) and res and int(res[0]) in (0, 1):
