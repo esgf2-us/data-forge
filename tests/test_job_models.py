@@ -56,6 +56,17 @@ def test_job_submission_rejects_empty_inputs() -> None:
         JobSubmission(input_files=[], output_mode="local", output_path="/tmp/out")
 
 
+def test_job_submission_rejects_empty_input_string() -> None:
+    from dataforge.models.job import JobSubmission
+
+    with pytest.raises(ValidationError, match="local inputs only"):
+        JobSubmission(
+            input_files=[""],
+            output_mode="local",
+            output_path="/tmp/out",
+        )
+
+
 def test_job_submission_rejects_network_path_inputs() -> None:
     from dataforge.models.job import JobSubmission
 
