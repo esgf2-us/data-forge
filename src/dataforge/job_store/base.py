@@ -18,7 +18,12 @@ def is_allowed_transition(old: JobStatus, new: JobStatus) -> bool:
 
 
 def terminal_status_precedence(a: JobStatus, b: JobStatus) -> JobStatus:
-    # Used for checkpoint decisions: if either side observed CANCELLED, it wins.
+    # Used for checkpoint decisions when reconciling *terminal* observations.
+    # Precondition: both inputs are terminal statuses.
+    terminal = {JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED}
+    if a not in terminal or b not in terminal:
+        raise ValueError("terminal_status_precedence requires terminal statuses")
+
     rank = {
         JobStatus.FAILED: 1,
         JobStatus.COMPLETED: 2,

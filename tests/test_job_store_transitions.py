@@ -1,6 +1,3 @@
-import pytest
-
-
 def test_transition_rules() -> None:
     from dataforge.job_store.base import is_allowed_transition
     from dataforge.models.job import JobStatus
@@ -33,3 +30,14 @@ def test_cancel_precedence() -> None:
         terminal_status_precedence(JobStatus.COMPLETED, JobStatus.FAILED)
         == JobStatus.COMPLETED
     )
+
+
+def test_terminal_status_precedence_requires_terminal_statuses() -> None:
+    from dataforge.job_store.base import terminal_status_precedence
+    from dataforge.models.job import JobStatus
+
+    try:
+        terminal_status_precedence(JobStatus.RUNNING, JobStatus.CANCELLED)
+    except ValueError:
+        return
+    raise AssertionError("expected ValueError")
