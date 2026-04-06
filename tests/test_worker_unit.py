@@ -14,14 +14,16 @@ def test_run_job_sets_running_progress_and_completes_with_file_result_url(
     from dataforge.core.converter import KerchunkConverter
     from dataforge.workers.converter_worker import run_job
 
-    in_file = tmp_path / "in.nc"
-    in_file.write_bytes(b"dummy")
+    in_file1 = tmp_path / "in1.nc"
+    in_file2 = tmp_path / "in2.nc"
+    in_file1.write_bytes(b"dummy")
+    in_file2.write_bytes(b"dummy")
 
     out_dir = tmp_path / "out"
     store = FakeJobStore()
     job = store.create(
         JobSubmission(
-            input_files=[str(in_file)],
+            input_files=[str(in_file1), str(in_file2)],
             output_mode="local",
             output_path=str(out_dir),
             output_name="job-out",
@@ -42,9 +44,39 @@ def test_run_job_sets_running_progress_and_completes_with_file_result_url(
 
     got = store.get(job.id)
     assert got.status == JobStatus.COMPLETED
-    assert got.progress_total == 1
-    assert got.progress_done == 1
+    assert got.progress_total == 2
+    assert got.progress_done == 2
     assert got.result_url == expected_output.resolve().as_uri()
+
+
+def test_run_job_is_noop_when_already_running(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from dataforge.core.converter import KerchunkConverter
+    from dataforge.workers.converter_worker import run_job
+
+    in_file = tmp_path / "in.nc"
+    in_file.write_bytes(b"dummy")
+
+    store = FakeJobStore()
+    job = store.create(
+        JobSubmission(
+            input_files=[str(in_file)],
+            output_mode="local",
+            output_path=str(tmp_path / "out"),
+            output_name="job-out",
+        )
+    )
+    store.set_status(job.id, expected=JobStatus.QUEUED, new=JobStatus.RUNNING)
+
+    def _should_not_run(self, inputs, config):
+        raise AssertionError("convert should not be called for already running jobs")
+
+    monkeypatch.setattr(KerchunkConverter, "convert", _should_not_run)
+
+    run_job(store, job.id)
+
+    assert store.get(job.id).status == JobStatus.RUNNING
 
 
 def test_run_job_cancelled_before_start_has_precedence(
