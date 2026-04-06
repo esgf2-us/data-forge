@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import json
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -19,7 +21,7 @@ from dataforge.workers.converter_worker import convert_job
 router = APIRouter(prefix="/api/v1")
 
 
-@router.post("/jobs", response_model=Job)
+@router.post("/jobs", response_model=Job, status_code=201)
 def create_job(
     submission: JobSubmission,
     store: Annotated[JobStore, Depends(get_job_store)],
@@ -44,9 +46,18 @@ def get_job(
 def list_jobs(
     store: Annotated[JobStore, Depends(get_job_store)],
     status: JobStatus | None = None,
-    limit: int = Query(50, ge=1),
+    limit: int = Query(50, ge=1, le=200),
     cursor: str | None = None,
 ) -> JobListResponse:
+    if cursor is not None:
+        try:
+            raw = base64.urlsafe_b64decode(cursor.encode("ascii"))
+            data = json.loads(raw.decode("utf-8"))
+            int(data["t"])
+            str(data["id"])
+        except Exception as e:
+            raise HTTPException(status_code=400, detail="invalid cursor") from e
+
     jobs, next_cursor = store.list(status=status, limit=limit, cursor=cursor)
     return JobListResponse(jobs=jobs, next_cursor=next_cursor)
 
