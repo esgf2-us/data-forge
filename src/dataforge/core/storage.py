@@ -8,6 +8,7 @@ from urllib.parse import unquote, urlparse
 import fsspec
 
 from dataforge.models.config import WriteError
+from dataforge.settings import s3_endpoint_url
 
 
 def _file_uri_to_path(uri: str) -> Path | None:
@@ -34,7 +35,23 @@ class StorageWriter:
                 return
 
             if output_uri.startswith("s3://"):
-                with fsspec.open(output_uri, "wb") as f:
+                endpoint = s3_endpoint_url()
+                storage_options: dict[str, Any] = {}
+                if endpoint:
+                    # Garage needs path-style addressing and a custom endpoint.
+                    storage_options = {
+                        "client_kwargs": {
+                            "endpoint_url": endpoint,
+                            "region_name": "garage",
+                        },
+                        "config_kwargs": {
+                            "s3": {
+                                "addressing_style": "path",
+                            }
+                        },
+                    }
+
+                with fsspec.open(output_uri, "wb", **storage_options) as f:
                     f.write(payload)
                 return
 

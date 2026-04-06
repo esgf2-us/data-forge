@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 from unittest.mock import patch
 
@@ -30,3 +31,20 @@ def test_storage_writer_uses_fsspec_for_s3_uri() -> None:
         StorageWriter().write_json("s3://bucket/prefix/ref.json", {"a": 1})
 
     assert open_mock.called
+
+
+def test_storage_writer_passes_endpoint_url_for_s3_when_configured() -> None:
+    from dataforge.core.storage import StorageWriter
+
+    with patch.dict(
+        os.environ,
+        {"DATAFORGE_S3_ENDPOINT_URL": "http://garage:3900"},
+        clear=False,
+    ):
+        with patch("dataforge.core.storage.fsspec.open") as open_mock:
+            StorageWriter().write_json("s3://bucket/prefix/ref.json", {"a": 1})
+
+    _args, kwargs = open_mock.call_args
+    assert kwargs["client_kwargs"]["endpoint_url"] == "http://garage:3900"
+    assert kwargs["client_kwargs"]["region_name"] == "garage"
+    assert kwargs["config_kwargs"]["s3"]["addressing_style"] == "path"
