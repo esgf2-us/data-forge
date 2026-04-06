@@ -1,0 +1,22 @@
+# Local dev Garage configuration for single-node use.
+
+metadata_dir = "/data/garage/meta"
+data_dir = "/data/garage/data"
+db_engine = "sqlite"
+
+replication_factor = 1
+
+rpc_bind_addr = "[::]:3901"
+rpc_public_addr = "garage:3901"
+
+# 32 bytes hex (dev-only)
+rpc_secret = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+[s3_api]
+s3_region = "garage"
+api_bind_addr = "[::]:3900"
+
+[admin]
+api_bind_addr = "[::]:3903"
+admin_token = "dev-admin-token"
+metrics_token = "dev-metrics-token"
