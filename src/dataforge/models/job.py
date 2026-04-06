@@ -5,7 +5,7 @@ from enum import StrEnum
 from typing import Any, Literal
 from urllib.parse import urlparse
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class JobStatus(StrEnum):
@@ -38,7 +38,26 @@ class JobSubmission(BaseModel):
                 raise ValueError("Stage 2 supports local inputs only")
             if p.scheme == "file" and p.netloc not in ("", "localhost"):
                 raise ValueError("Stage 2 supports local inputs only")
+            if p.scheme == "file" and not p.path:
+                raise ValueError("Stage 2 supports local inputs only")
         return v
+
+    @field_validator("inline_threshold")
+    @classmethod
+    def _validate_inline_threshold(cls, v: int) -> int:
+        if v < 0:
+            raise ValueError("inline_threshold must be >= 0")
+        return v
+
+    @model_validator(mode="after")
+    def _validate_output_mode_path(self) -> "JobSubmission":
+        if self.output_mode == "s3" and not self.output_path.startswith("s3://"):
+            raise ValueError("output_path must be an s3:// URL when output_mode is s3")
+        if self.output_mode == "local" and self.output_path.startswith("s3://"):
+            raise ValueError(
+                "output_path must be a local path when output_mode is local"
+            )
+        return self
 
 
 class Job(BaseModel):
@@ -60,7 +79,7 @@ class Job(BaseModel):
 
 class JobListResponse(BaseModel):
     jobs: list[Job]
-    next_cursor: str | None
+    next_cursor: str | None = None
 
 
 class JobResultResponse(BaseModel):
