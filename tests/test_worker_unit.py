@@ -9,7 +9,7 @@ from dataforge.models.job import JobStatus, JobSubmission
 
 
 def test_run_job_sets_running_progress_and_completes_with_file_result_url(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
     from dataforge.core.converter import KerchunkConverter
     from dataforge.workers.converter_worker import run_job
@@ -39,6 +39,7 @@ def test_run_job_sets_running_progress_and_completes_with_file_result_url(
         return str(expected_output)
 
     monkeypatch.setattr(KerchunkConverter, "convert", _fake_convert)
+    caplog.set_level("INFO")
 
     run_job(store, job.id)
 
@@ -47,6 +48,9 @@ def test_run_job_sets_running_progress_and_completes_with_file_result_url(
     assert got.progress_total == 2
     assert got.progress_done == 2
     assert got.result_url == expected_output.resolve().as_uri()
+    assert "worker job started" in caplog.text
+    assert "worker job completed" in caplog.text
+    assert "worker job result stored" in caplog.text
 
 
 def test_run_job_is_noop_when_already_running(

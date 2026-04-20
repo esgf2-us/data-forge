@@ -1,0 +1,59 @@
+services:
+  api:
+    depends_on:
+      garagefs:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      DATAFORGE_OUTPUT_MODE: s3
+      DATAFORGE_S3_ENDPOINT_URL: http://garagefs:3900
+      DATAFORGE_S3_OUTPUT_PATH: s3://dataforge-kerchunks/kerchunks
+      AWS_ACCESS_KEY_ID: dataforge
+      AWS_SECRET_ACCESS_KEY: dataforge-secret
+      AWS_DEFAULT_REGION: garage
+
+  worker:
+    depends_on:
+      garagefs:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      DATAFORGE_OUTPUT_MODE: s3
+      DATAFORGE_S3_ENDPOINT_URL: http://garagefs:3900
+      DATAFORGE_S3_OUTPUT_PATH: s3://dataforge-kerchunks/kerchunks
+      AWS_ACCESS_KEY_ID: dataforge
+      AWS_SECRET_ACCESS_KEY: dataforge-secret
+      AWS_DEFAULT_REGION: garage
+
+  garagefs:
+    image: dxflrs/garage:v2.3.0
+    entrypoint:
+      - /garage
+    command:
+      - server
+      - --single-node
+      - --default-bucket
+    healthcheck:
+      test: ["CMD", "/garage", "status"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    environment:
+      GARAGE_DEFAULT_ACCESS_KEY: dataforge
+      GARAGE_DEFAULT_SECRET_KEY: dataforge-secret
+      GARAGE_DEFAULT_BUCKET: dataforge-kerchunks
+      GARAGE_RPC_SECRET: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      GARAGE_CONFIG_FILE: /etc/garage.toml
+    ports:
+      - "3900:3900"
+      - "3901:3901"
+      - "3902:3902"
+      - "3903:3903"
+    volumes:
+      - ./docker/garage.toml:/etc/garage.toml:ro
+      - garage-data:/var/lib/garage
+
+volumes:
+  garage-data:

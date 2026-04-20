@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from dataforge.settings import local_output_path
+from dataforge.settings import local_output_path, s3_output_path
 
 
 class JobStatus(StrEnum):
@@ -102,6 +102,8 @@ class JobSubmission(BaseModel):
 
         if self.output_mode == "local" and output_path is None:
             output_path = local_output_path()
+        if self.output_mode == "s3" and output_path is None:
+            output_path = s3_output_path()
 
         if output_path is None:
             raise ValueError("output_path must be non-empty")
