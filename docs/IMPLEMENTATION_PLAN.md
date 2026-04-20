@@ -1,7 +1,7 @@
 # Data-Forge Implementation Plan
 
 ## Overview
-This document outlines a staged approach to building Data-Forge, a service for generating Kerchunk reference files and managing catalogs for climate datasets. **Key Architecture**: Data-Forge is a compute service that writes reference files directly to user-specified storage locations (S3 or local filesystem), or uploads them via an ESGF publishing endpoint and then updates existing STAC Item assets. The service does NOT provide internal storage; users manage their own file storage infrastructure.
+This document outlines a staged approach to building Data-Forge, a service for generating Kerchunk reference files and managing catalogs for climate datasets. **Key Architecture**: Data-Forge is a compute service that writes reference files directly to user-specified storage locations (S3 or local filesystem), then optionally appends new assets to existing STAC Items via an ESGF publishing job. The service does NOT provide internal storage; users manage their own file storage infrastructure.
 
 ---
 
@@ -111,7 +111,7 @@ This document outlines a staged approach to building Data-Forge, a service for g
 - Create FastAPI application with core endpoints
 - Job monitoring capabilities
 - Add a minimal CLI over the local API so developers can test the stack end to end
-- Keep Stage 2 scoped to local-input MVP only; defer remote input and ESGF/STAC work
+- Keep Stage 2 scoped to local-input MVP only
 
 ### Tasks
 1. **Job Queue Setup**
@@ -149,7 +149,7 @@ This document outlines a staged approach to building Data-Forge, a service for g
     - Create dramatiq actor for conversion
     - Integrate with Stage 1 converter
     - Handle job lifecycle and state updates
-    - Write reference files to the configured output destination (local or S3)
+    - Write reference files to the configured output destination (local)
     - Store job metadata only in Redis (NOT the reference files)
     - Update job progress (files processed / total)
 
@@ -165,12 +165,12 @@ This document outlines a staged approach to building Data-Forge, a service for g
    - Configure OpenAPI/Swagger docs
 
 6. **Core Endpoints**
-     - `POST /api/v1/jobs` - Submit conversion job (server-configured output destination)
+    - `POST /api/v1/jobs` - Submit local-input conversion job
      - `GET /api/v1/jobs/{job_id}` - Get job status and progress
      - `GET /api/v1/jobs` - List jobs (with pagination, filtering by status)
-     - `GET /api/v1/jobs/{job_id}/result` - Get result URL/path
-     - `DELETE /api/v1/jobs/{job_id}` - Cancel job (if queued/running)
-     - Defer STAC/ESGF-specific endpoints until upstream work lands
+    - `GET /api/v1/jobs/{job_id}/result` - Get result URL/path
+    - `DELETE /api/v1/jobs/{job_id}` - Cancel job (if queued/running)
+    - No remote input or STAC/ESGF endpoints in Stage 2
 
 7. **Request/Response Models** (`src/dataforge/models/api.py`)
    - Define Pydantic models for requests/responses
@@ -180,7 +180,6 @@ This document outlines a staged approach to building Data-Forge, a service for g
 
 8. **Testing**
      - Integration tests for API endpoints
-     - Worker tests with mock S3 destinations
      - Test job submission and status retrieval
      - Test progress tracking
      - Test local-input validation and cancellation flows
@@ -194,7 +193,7 @@ This document outlines a staged approach to building Data-Forge, a service for g
 ### Deliverables
 - ✅ Asynchronous job processing
 - ✅ Job state management (metadata only in Redis)
-- ✅ Working REST API for local-input MVP jobs
+ - ✅ Working REST API for local-input MVP jobs
 - ✅ Minimal CLI for local API testing
 - ✅ OpenAPI/Swagger documentation
 - ✅ Integration tests
@@ -265,8 +264,8 @@ This document outlines a staged approach to building Data-Forge, a service for g
 ## Stage 4: STAC Catalog Integration (Week 6-7)
 
 ### Goals
-- Update existing STAC Items with new Kerchunk reference assets
-- Support ESGF publish (upload + required STAC asset update)
+- Write Kerchunk reference files to local/S3 first, then append a new STAC asset pointing to that file
+- Support ESGF publish as a second-step STAC asset update job
 - **Security Model**: Single catalog configured server-side (prevents abuse)
 - Service authenticates to catalog; catalog is public read-only
 
@@ -286,10 +285,10 @@ This document outlines a staged approach to building Data-Forge, a service for g
     - Fail fast on hard failures (400, 401/403, 404)
 
 3. **ESGF Publisher** (`src/dataforge/core/esgf_publisher.py`)
-   - Implement upload of the generated Kerchunk JSON
-   - Return a stable, externally-resolvable href for use in the STAC asset
-   - Server-configured endpoint and credentials (not per-job)
-   - Error handling and retry logic (exponential backoff + jitter)
+    - Implement upload of the generated Kerchunk JSON
+    - Return a stable, externally-resolvable href for use in the STAC asset
+    - Server-configured endpoint and credentials (not per-job)
+    - Error handling and retry logic (exponential backoff + jitter)
 
 4. **Publishing + STAC Configuration** (Server-Side Only)
    - **MVP Security**: Server-configured STAC base URL + service credential/token
@@ -298,11 +297,11 @@ This document outlines a staged approach to building Data-Forge, a service for g
    - **Rationale**: Prevents bad actors from publishing to arbitrary catalogs/endpoints
 
 5. **Worker Updates**
-   - If output_mode == esgf_publish:
-     - Upload Kerchunk JSON via ESGF publisher
-     - Patch the target STAC Item to add/replace the configured asset
-   - STAC update is required in esgf_publish mode: if it fails after retries, the job fails
-   - Record publication results (asset href, timestamps, failure reason)
+    - If output_mode == esgf_publish:
+      - Upload the already-written Kerchunk JSON via ESGF publisher if needed
+      - Patch the target STAC Item to append a new asset that points to the Kerchunk file
+    - STAC update is required in esgf_publish mode: if it fails after retries, the job fails
+    - Record publication results (asset href, timestamps, failure reason)
 
 6. **API Endpoints**
    - Enhance `POST /api/v1/jobs` with output mode selection
