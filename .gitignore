@@ -71,6 +71,10 @@ instance/
 # Sphinx documentation
 docs/_build/
 
+# Benchmark data and outputs
+data/benchmark-samples/
+data/benchmarks/
+
 # PyBuilder
 .pybuilder/
 target/
