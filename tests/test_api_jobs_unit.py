@@ -33,7 +33,6 @@ def test_post_creates_queued_job(client: tuple[TestClient, FakeJobStore]) -> Non
         "/api/v1/jobs",
         json={
             "input_files": ["/tmp/input.nc"],
-            "output_mode": "local",
             "output_path": "/tmp/out",
         },
     )
@@ -45,6 +44,42 @@ def test_post_creates_queued_job(client: tuple[TestClient, FakeJobStore]) -> Non
     import dataforge.api.routes.jobs as jobs_routes
 
     jobs_routes.convert_job.send.assert_called_once_with(data["id"])
+
+
+def test_post_uses_env_default_local_output_path(
+    client: tuple[TestClient, FakeJobStore], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    c, store = client
+    monkeypatch.setenv("DATAFORGE_LOCAL_OUTPUT_PATH", "/tmp/from-env")
+
+    res = c.post(
+        "/api/v1/jobs",
+        json={
+            "input_files": ["/tmp/input.nc"],
+        },
+    )
+
+    assert res.status_code == 201
+    job_id = res.json()["id"]
+    assert store.get(job_id).submission.output_path == "/tmp/from-env"
+    assert store.get(job_id).submission.output_mode == "local"
+
+
+def test_post_rejects_client_supplied_output_mode(
+    client: tuple[TestClient, FakeJobStore], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    c, _store = client
+    monkeypatch.setenv("DATAFORGE_LOCAL_OUTPUT_PATH", "/tmp/from-env")
+
+    res = c.post(
+        "/api/v1/jobs",
+        json={
+            "input_files": ["/tmp/input.nc"],
+            "output_mode": "s3",
+        },
+    )
+
+    assert res.status_code == 422
 
 
 def test_get_missing_returns_404(client: tuple[TestClient, FakeJobStore]) -> None:
@@ -63,7 +98,6 @@ def test_get_result_before_completed_returns_409_and_includes_status(
         "/api/v1/jobs",
         json={
             "input_files": ["/tmp/input.nc"],
-            "output_mode": "local",
             "output_path": "/tmp/out",
         },
     )
