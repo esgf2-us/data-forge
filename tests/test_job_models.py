@@ -5,13 +5,20 @@ from pydantic import ValidationError
 def test_job_create_request_defaults() -> None:
     from dataforge.models.job import JobCreateRequest
 
-    req = JobCreateRequest(input_files=["/tmp/a.nc"], output_path="/tmp/out")
+    req = JobCreateRequest(input_files=["/tmp/a.nc"])
 
     assert req.output_name is None
     assert req.concat_dims == ["time"]
     assert req.identical_dims is None
     assert req.inline_threshold == 300
     assert req.metadata is None
+
+
+def test_job_create_request_rejects_output_path_field() -> None:
+    from dataforge.models.job import JobCreateRequest
+
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        JobCreateRequest(input_files=["/tmp/a.nc"], output_path="/tmp/out")
 
 
 def test_job_create_request_rejects_output_mode_field() -> None:

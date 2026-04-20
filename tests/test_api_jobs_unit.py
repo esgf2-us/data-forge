@@ -16,6 +16,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> tuple[TestClient, FakeJobStore]:
     store = FakeJobStore()
     app = create_app()
     app.dependency_overrides[get_job_store] = lambda: store
+    monkeypatch.setenv("DATAFORGE_LOCAL_OUTPUT_PATH", "/tmp/from-env")
 
     # Avoid hitting a real Dramatiq broker in unit tests.
     import dataforge.api.routes.jobs as jobs_routes
@@ -33,7 +34,6 @@ def test_post_creates_queued_job(client: tuple[TestClient, FakeJobStore]) -> Non
         "/api/v1/jobs",
         json={
             "input_files": ["/tmp/input.nc"],
-            "output_path": "/tmp/out",
         },
     )
     assert res.status_code == 201
