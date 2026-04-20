@@ -26,6 +26,16 @@ python scripts/benchmark_stage1.py \
   --repeats 3
 ```
 
+## Container Run
+
+Run the benchmark inside the project container when local Python deps are not installed:
+
+```bash
+DATAFORGE_WORKSPACE=/tmp docker compose run --rm -v "$PWD":/workspace -w /workspace api sh -lc 'python -m pip install fsspec s3fs kerchunk h5py xarray h5netcdf pydantic >/tmp/bench-pip.log 2>&1 && PYTHONPATH=/workspace/src python scripts/benchmark_stage1.py --single /workspace/data/benchmark-samples/single/*.nc --multi /workspace/data/benchmark-samples/multi/*.nc --repeats 3 --output-dir /tmp/benchmarks'
+```
+
+If you use a container run, the sample files must be HDF5/NetCDF4 inputs that Kerchunk can open.
+
 ## Output
 
 The script prints JSON with min/mean/median/max durations for each scenario.
