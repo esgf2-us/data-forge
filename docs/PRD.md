@@ -7,7 +7,7 @@
 * **Name:** Data-Forge (working title)  
 * **Primary Purpose:** To generate reference files (starting with Kerchunk) and update/provide catalogs for users, streamlining data access and management for climate datasets.  
 * **Target Users:** Data publishers  
-* **Provides:** An asynchronous service to generate reference files (Kerchunk to start) and (optionally) upload them and attach them as assets on existing STAC Items, enabling data publishers to create and catalog reference files at sites that lack job schedulers or dedicated compute resources
+* **Provides:** An asynchronous service to generate reference files (Kerchunk to start), write them to local filesystem or S3, and optionally run a publish job that appends a new asset to an existing STAC Item pointing at that Kerchunk file
 
 ---
 
@@ -59,9 +59,9 @@
      * Support chunk strategy: which dimensions  
      * Different grids  
   2. Provide Kerchunk reference files for download or direct access.  
-  3. Upload Kerchunk reference files (optional) and update an existing STAC Item to include them as assets in the ESGF-NG STAC catalog.  
+  3. Upload Kerchunk reference files (optional) and update an existing STAC Item by appending a new asset that points to the Kerchunk file in the ESGF-NG STAC catalog.  
   4. API access (REST API and CLI tool).  
-  5. Asynchronous job monitoring and status tracking.  
+  5. Asynchronous job monitoring and status tracking. 
 * **Integrations:**
 
   1. Globus Auth (API authentication and access control).  
@@ -73,7 +73,7 @@
   2. Submit job with desired data via publicly accessible links (S3 store, HTTPS from ESGF catalog, etc).  
   3. Monitor job progress and status.  
   4. System converts files to Kerchunk reference files asynchronously.  
-  5. Optional: System uploads Kerchunk reference files and updates an existing STAC Item to include them as assets in ESGF-NG STAC catalog.  
+  5. Optional: System uploads Kerchunk reference files and updates an existing STAC Item by appending a new asset that points to the Kerchunk file in ESGF-NG STAC catalog.  
   6. Optional: Download reference files for validation or local use.
 
 ---
@@ -91,7 +91,7 @@
 * **Security and Compliance:**
 
   * API access control managed via Globus Auth.  
-  * STAC catalog is local and unauthenticated (read-only public access).  
+  * STAC catalog is local and unauthenticated (read-only public access). 
 * **Access Methods:**
 
   * REST API (programmatic access)  
@@ -115,7 +115,7 @@
   * Catalog: STAC API client for ESGF-NG STAC catalog.  
     * Service uses configured credentials/API tokens to update existing STAC Items (asset patching)  
   * Storage: User-provided storage locations (S3 and local filesystem).  
-    * Data-Forge writes reference files to user-specified output paths (local or S3)  
+    * Data-Forge writes reference files to user-specified output paths (local or S3) before any optional publish job runs  
     * In "ESGF publish" mode, Data-Forge uploads the reference file via a server-configured publishing endpoint and patches STAC to reference the uploaded URL  
   * Containerization: Docker.  
   * Deployment: Docker-compose (single node), Helm charts (Kubernetes).
@@ -160,8 +160,6 @@
   * ESGF publishing endpoint API access (requires service credentials).  
   * ESGF NG: design docs   
     * https://github.com/ESGF/esgf-roadmap/  
-  * STAC compliance and schema updates.  
-  * Potential MetaGrid integration (if pursued).
 
 ---
 
