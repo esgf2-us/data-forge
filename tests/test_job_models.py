@@ -2,6 +2,29 @@ import pytest
 from pydantic import ValidationError
 
 
+def test_job_create_request_defaults() -> None:
+    from dataforge.models.job import JobCreateRequest
+
+    req = JobCreateRequest(input_files=["/tmp/a.nc"], output_path="/tmp/out")
+
+    assert req.output_name is None
+    assert req.concat_dims == ["time"]
+    assert req.identical_dims is None
+    assert req.inline_threshold == 300
+    assert req.metadata is None
+
+
+def test_job_create_request_rejects_output_mode_field() -> None:
+    from dataforge.models.job import JobCreateRequest
+
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        JobCreateRequest(
+            input_files=["/tmp/a.nc"],
+            output_path="/tmp/out",
+            output_mode="local",
+        )
+
+
 def test_job_submission_defaults() -> None:
     from dataforge.models.job import JobSubmission
 
@@ -123,4 +146,29 @@ def test_job_submission_rejects_empty_output_path() -> None:
             input_files=["/tmp/a.nc"],
             output_mode="local",
             output_path="",
+        )
+
+
+def test_job_submission_uses_env_default_for_local_output(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from dataforge.models.job import JobSubmission
+
+    monkeypatch.setenv("DATAFORGE_LOCAL_OUTPUT_PATH", "/tmp/from-env")
+
+    sub = JobSubmission(
+        input_files=["/tmp/a.nc"],
+        output_mode="local",
+    )
+
+    assert sub.output_path == "/tmp/from-env"
+
+
+def test_job_submission_rejects_missing_local_output_path_without_env() -> None:
+    from dataforge.models.job import JobSubmission
+
+    with pytest.raises(ValidationError, match="output_path must be non-empty"):
+        JobSubmission(
+            input_files=["/tmp/a.nc"],
+            output_mode="local",
         )

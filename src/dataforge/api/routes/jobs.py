@@ -11,11 +11,12 @@ from dataforge.api.deps import get_job_store
 from dataforge.job_store.base import JobStore
 from dataforge.models.job import (
     Job,
+    JobCreateRequest,
     JobListResponse,
     JobResultResponse,
     JobStatus,
-    JobSubmission,
 )
+from dataforge.settings import output_mode
 from dataforge.workers.converter_worker import convert_job
 
 router = APIRouter(prefix="/api/v1")
@@ -23,9 +24,10 @@ router = APIRouter(prefix="/api/v1")
 
 @router.post("/jobs", response_model=Job, status_code=201)
 def create_job(
-    submission: JobSubmission,
+    request: JobCreateRequest,
     store: Annotated[JobStore, Depends(get_job_store)],
 ) -> Job:
+    submission = request.to_submission(output_mode())
     job = store.create(submission)
     convert_job.send(job.id)
     return job
