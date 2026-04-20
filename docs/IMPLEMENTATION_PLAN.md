@@ -62,46 +62,44 @@ This document outlines a staged approach to building Data-Forge, a service for g
 - Implement basic Kerchunk conversion functionality
 - Support single file and multi-file conversion
 - Support writing to local filesystem and S3
-- Support ESGF publish (upload + STAC asset update)
+- Benchmark multi-input conversion paths before expanding scope
 
 ### Tasks
 1. **Conversion Module** (`src/dataforge/core/converter.py`)
-   - Implement `KerchunkConverter` class
-   - Support single NetCDF file conversion
-   - Support multi-file conversion with concatenation along specified dimensions
-   - Handle different chunk strategies
-    - Write output to one server-configured destination: local, S3, or ESGF publish (upload + STAC asset update)
-   - Basic error handling and logging
+    - Implement `KerchunkConverter` class
+    - Support single NetCDF file conversion
+    - Support multi-file conversion with concatenation along specified dimensions
+    - Handle different chunk strategies
+    - Write output to one server-configured destination: local or S3
+    - Basic error handling and logging
 
 2. **Storage Writer** (`src/dataforge/core/storage.py`)
-   - Implement fsspec-based output writer (DI-friendly interface + concrete implementations)
-   - Support writing to S3 (s3://)
-   - Support writing to local filesystem
-   - Handle authentication for output destinations
-   - Provide an ESGF publish output implementation that uploads JSON and returns a stable href for STAC
+    - Implement fsspec-based output writer (DI-friendly interface + concrete implementations)
+    - Support writing to S3 (s3://)
+    - Support writing to local filesystem
+    - Handle authentication for output destinations
+    - Add a docker-compose overlay for local S3-compatible testing and output validation
 
 3. **Configuration** (`src/dataforge/models/config.py`)
-    - Define conversion configuration model:
-      - inline_threshold (default: 300)
-      - concat_dims (e.g., ['time'])
-      - identical_dims (e.g., ['lat', 'lon', 'lat_bnds', 'lon_bnds'])
-      - output_mode (one of: local, s3, esgf_publish)
-      - output_path (server-configured for local and s3 output)
-      - stac_collection_id (required for esgf_publish)
-      - stac_item_id (required for esgf_publish)
-      - stac_asset_key (default: kerchunk_reference)
+     - Define conversion configuration model:
+       - inline_threshold (default: 300)
+       - concat_dims (e.g., ['time'])
+       - identical_dims (e.g., ['lat', 'lon', 'lat_bnds', 'lon_bnds'])
+       - output_mode (one of: local, s3)
+       - output_path (server-configured for local and s3 output)
 
-4. **Testing**
-   - Unit tests for converter
-   - Test with sample NetCDF files
-   - Test writing to mock S3 (moto) and local filesystem
-   - Benchmark performance
+4. **Testing & Benchmarking**
+    - Unit tests for converter
+    - Test with sample NetCDF files
+    - Test writing to mock S3 (moto) and local filesystem
+    - Add a benchmark plan for single-input vs multi-input conversion
+    - Measure concat-dimension behavior and output stability across multiple inputs
 
 ### Deliverables
 - ✅ Working Kerchunk converter
-- ✅ Output to user-specified locations
+- ✅ Output to user-specified locations (local and S3)
 - ✅ Unit tests with >80% coverage
-- ✅ Documentation for conversion module
+- ✅ Multi-input benchmark coverage and documentation
 
 ---
 
@@ -113,6 +111,7 @@ This document outlines a staged approach to building Data-Forge, a service for g
 - Create FastAPI application with core endpoints
 - Job monitoring capabilities
 - Add a minimal CLI over the local API so developers can test the stack end to end
+- Keep Stage 2 scoped to local-input MVP only; defer remote input and ESGF/STAC work
 
 ### Tasks
 1. **Job Queue Setup**
@@ -121,46 +120,43 @@ This document outlines a staged approach to building Data-Forge, a service for g
    - Implement job states: QUEUED, RUNNING, COMPLETED, FAILED, CANCELLED
 
 2. **Job Models** (`src/dataforge/models/job.py`)
-   - Define job data structures:
-      ```python
-      class JobSubmission:
-          input_files: List[str]  # S3, HTTPS, OpenDAP URLs
-          dataset_id: str
-          output_mode: str  # one of: local, s3, esgf_publish
-           output_path: Optional[str]  # server-configured for local/s3, unused for esgf_publish
-          stac_collection_id: Optional[str]  # required for esgf_publish
-          stac_item_id: Optional[str]  # required for esgf_publish
-          stac_asset_key: str = "kerchunk_reference"
-          concat_dims: List[str] = ['time']
-          identical_dims: Optional[List[str]]
-          inline_threshold: int = 300
-          metadata: Optional[Dict[str, Any]]
+     - Define job data structures:
+        ```python
+        class JobSubmission:
+            input_files: List[str]  # local files only for Stage 2 MVP
+            output_path: Optional[str]
+            output_name: Optional[str]
+            concat_dims: List[str] = ['time']
+            identical_dims: Optional[List[str]]
+            inline_threshold: int = 300
+            metadata: Optional[Dict[str, Any]]
 
-      class Job:
-          id: str  # job-{uuid}
-          status: JobStatus
-          submission: JobSubmission
-          created_at: datetime
-          started_at: Optional[datetime]
-          completed_at: Optional[datetime]
-          updated_at: datetime
-          progress: Optional[JobProgress]  # files processed / total
-          error_message: Optional[str]
-          result_url: Optional[str]  # Output path or published href (mode-dependent)
-      ```
+        class Job:
+            id: str  # job-{uuid}
+            status: JobStatus
+            submission: JobSubmission
+            created_at: datetime
+            updated_at: datetime
+            started_at: Optional[datetime]
+            completed_at: Optional[datetime]
+            progress_total: Optional[int]
+            progress_done: Optional[int]
+            error_message: Optional[str]
+            result_url: Optional[str]  # Output path
+        ```
 
 3. **Worker Implementation** (`src/dataforge/workers/converter_worker.py`)
-   - Create dramatiq actor for conversion
-   - Integrate with Stage 1 converter
-   - Handle job lifecycle and state updates
-   - Write reference files to the configured output destination (local, S3, or ESGF publish)
-   - Store job metadata only in Redis (NOT the reference files)
-   - Update job progress (files processed / total)
+    - Create dramatiq actor for conversion
+    - Integrate with Stage 1 converter
+    - Handle job lifecycle and state updates
+    - Write reference files to the configured output destination (local or S3)
+    - Store job metadata only in Redis (NOT the reference files)
+    - Update job progress (files processed / total)
 
 4. **Job Storage**
-   - Redis for job metadata and status only
-   - No internal file storage - outputs go to the configured destination
-   - Job results contain output path or published href (mode-dependent)
+    - Redis for job metadata and status only
+    - No internal file storage - outputs go to the configured destination
+    - Job results contain output path
 
 5. **API Structure** (`src/dataforge/api/`)
    - Set up FastAPI application
@@ -169,11 +165,12 @@ This document outlines a staged approach to building Data-Forge, a service for g
    - Configure OpenAPI/Swagger docs
 
 6. **Core Endpoints**
-   - `POST /api/v1/jobs` - Submit conversion job (server-configured output destination)
-   - `GET /api/v1/jobs/{job_id}` - Get job status and progress
-   - `GET /api/v1/jobs` - List jobs (with pagination, filtering by status)
-   - `GET /api/v1/jobs/{job_id}/result` - Get result URL/path/href (mode-dependent)
-   - `DELETE /api/v1/jobs/{job_id}` - Cancel job (if queued/running)
+     - `POST /api/v1/jobs` - Submit conversion job (server-configured output destination)
+     - `GET /api/v1/jobs/{job_id}` - Get job status and progress
+     - `GET /api/v1/jobs` - List jobs (with pagination, filtering by status)
+     - `GET /api/v1/jobs/{job_id}/result` - Get result URL/path
+     - `DELETE /api/v1/jobs/{job_id}` - Cancel job (if queued/running)
+     - Defer STAC/ESGF-specific endpoints until upstream work lands
 
 7. **Request/Response Models** (`src/dataforge/models/api.py`)
    - Define Pydantic models for requests/responses
@@ -182,21 +179,22 @@ This document outlines a staged approach to building Data-Forge, a service for g
    - Example requests matching PRD CLI examples
 
 8. **Testing**
-    - Integration tests for API endpoints
-    - Worker tests with mock S3 destinations
-    - Test job submission and status retrieval
-    - Test progress tracking
+     - Integration tests for API endpoints
+     - Worker tests with mock S3 destinations
+     - Test job submission and status retrieval
+     - Test progress tracking
+     - Test local-input validation and cancellation flows
 
 9. **Local CLI Smoke Test** (`src/dataforge/cli/`)
-   - Implement a thin CLI over the REST API for local development
-   - Support `submit`, `status`, `list`, and `get-url`
-   - Make the API base URL configurable for local testing
-   - Defer auth, rich output, config files, and batch submission to later stages
+    - Implement a thin CLI over the REST API for local development
+    - Support `submit`, `status`, `list`, and `get-url`
+    - Make the API base URL configurable for local testing
+    - Defer auth, rich output, config files, and batch submission to later stages
 
 ### Deliverables
 - ✅ Asynchronous job processing
 - ✅ Job state management (metadata only in Redis)
-- ✅ Working REST API with user-specified output paths
+- ✅ Working REST API for local-input MVP jobs
 - ✅ Minimal CLI for local API testing
 - ✅ OpenAPI/Swagger documentation
 - ✅ Integration tests
