@@ -22,7 +22,6 @@ class JobCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     input_files: list[str]
-    output_path: str | None = None
     output_name: str | None = None
 
     concat_dims: list[str] = Field(default_factory=lambda: ["time"])

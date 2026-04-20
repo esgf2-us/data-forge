@@ -17,7 +17,7 @@ Data-Forge is an asynchronous service for generating reference files (starting w
 ## Typical Workflow
 
 1. **Authenticate** using Globus Auth via CLI or API.
-2. **Submit a job** with NetCDF file URLs and parameters (e.g., chunking, output path).
+2. **Submit a job** with NetCDF file URLs and parameters (e.g., chunking).
 3. **Monitor job status and progress** Async via API/CLI.
 4. **Download or access the generated Kerchunk reference files** at your storage endpoint.
 5. **View published entries** in a STAC catalog (optionally).
@@ -33,7 +33,6 @@ $ data-forge submit \
   --input "s3://my-bucket/dataset/*.nc" \
   --dataset-id "CMIP6.Project.Inst.Model.Experiment.Variable" \
   --concat-dims time \
-  --output-path "s3://my-refs-bucket/output/" \
   --metadata '{"project": "CMIP6"}'
 
 # Submit a job and publish to ESGF (upload + update existing STAC Item asset)

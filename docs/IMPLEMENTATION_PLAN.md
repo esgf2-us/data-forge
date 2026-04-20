@@ -70,7 +70,7 @@ This document outlines a staged approach to building Data-Forge, a service for g
    - Support single NetCDF file conversion
    - Support multi-file conversion with concatenation along specified dimensions
    - Handle different chunk strategies
-   - Write output to one configured destination: local, S3, or ESGF publish (upload + STAC asset update)
+    - Write output to one server-configured destination: local, S3, or ESGF publish (upload + STAC asset update)
    - Basic error handling and logging
 
 2. **Storage Writer** (`src/dataforge/core/storage.py`)
@@ -86,7 +86,7 @@ This document outlines a staged approach to building Data-Forge, a service for g
       - concat_dims (e.g., ['time'])
       - identical_dims (e.g., ['lat', 'lon', 'lat_bnds', 'lon_bnds'])
       - output_mode (one of: local, s3, esgf_publish)
-      - output_path (required for local and s3 output)
+      - output_path (server-configured for local and s3 output)
       - stac_collection_id (required for esgf_publish)
       - stac_item_id (required for esgf_publish)
       - stac_asset_key (default: kerchunk_reference)
@@ -105,13 +105,14 @@ This document outlines a staged approach to building Data-Forge, a service for g
 
 ---
 
-## Stage 2: Job Queue System + Basic API (Week 3-4)
+## Stage 2: Job Queue System + Basic API + Local CLI Smoke Test (Week 3-4)
 
 ### Goals
 - Implement asynchronous job processing
 - Set up Redis + dramatiq for job management
 - Create FastAPI application with core endpoints
 - Job monitoring capabilities
+- Add a minimal CLI over the local API so developers can test the stack end to end
 
 ### Tasks
 1. **Job Queue Setup**
@@ -126,7 +127,7 @@ This document outlines a staged approach to building Data-Forge, a service for g
           input_files: List[str]  # S3, HTTPS, OpenDAP URLs
           dataset_id: str
           output_mode: str  # one of: local, s3, esgf_publish
-          output_path: Optional[str]  # required for local/s3, unused for esgf_publish
+           output_path: Optional[str]  # server-configured for local/s3, unused for esgf_publish
           stac_collection_id: Optional[str]  # required for esgf_publish
           stac_item_id: Optional[str]  # required for esgf_publish
           stac_asset_key: str = "kerchunk_reference"
@@ -168,7 +169,7 @@ This document outlines a staged approach to building Data-Forge, a service for g
    - Configure OpenAPI/Swagger docs
 
 6. **Core Endpoints**
-   - `POST /api/v1/jobs` - Submit conversion job (requires output_mode; requires output_path for local/s3)
+   - `POST /api/v1/jobs` - Submit conversion job (server-configured output destination)
    - `GET /api/v1/jobs/{job_id}` - Get job status and progress
    - `GET /api/v1/jobs` - List jobs (with pagination, filtering by status)
    - `GET /api/v1/jobs/{job_id}/result` - Get result URL/path/href (mode-dependent)
@@ -181,15 +182,22 @@ This document outlines a staged approach to building Data-Forge, a service for g
    - Example requests matching PRD CLI examples
 
 8. **Testing**
-   - Integration tests for API endpoints
-   - Worker tests with mock S3 destinations
-   - Test job submission and status retrieval
-   - Test progress tracking
+    - Integration tests for API endpoints
+    - Worker tests with mock S3 destinations
+    - Test job submission and status retrieval
+    - Test progress tracking
+
+9. **Local CLI Smoke Test** (`src/dataforge/cli/`)
+   - Implement a thin CLI over the REST API for local development
+   - Support `submit`, `status`, `list`, and `get-url`
+   - Make the API base URL configurable for local testing
+   - Defer auth, rich output, config files, and batch submission to later stages
 
 ### Deliverables
 - ✅ Asynchronous job processing
 - ✅ Job state management (metadata only in Redis)
 - ✅ Working REST API with user-specified output paths
+- ✅ Minimal CLI for local API testing
 - ✅ OpenAPI/Swagger documentation
 - ✅ Integration tests
 
@@ -1039,7 +1047,7 @@ These criteria are already captured in the "MVP COMPLETE" section above. Refer t
 |-------|----------|-------|-------------|
 | 0 | 1 week | 1 | Project Setup & Foundation |
 | 1 | 1 week | 2 | Core Kerchunk Conversion |
-| 2 | 2 weeks | 3-4 | Job Queue System + Basic API |
+| 2 | 2 weeks | 3-4 | Job Queue System + Basic API + Local CLI Smoke Test |
 | 3 | 1 week | 5 | Remote Data Source Support (S3, local) |
 | 4 | 2 weeks | 6-7 | STAC Catalog Integration (server-configured) |
 | 5 | 1 week | 8 | Dask Parallelization |
@@ -1053,7 +1061,7 @@ These criteria are already captured in the "MVP COMPLETE" section above. Refer t
 
 **1. Parallel Development Opportunities (2-3 developers)**
 - Weeks 5-8: Developer A on remote I/O + Dask, Developer B on STAC integration
-- Weeks 9-12: Developer A on advanced features, Developer B on Kubernetes/Docker/CLI
+- Weeks 9-12: Developer A on advanced features, Developer B on Kubernetes/Docker/full CLI UX
 - Weeks 13-14: All developers on Globus Auth integration
 - Weeks 15-16: All developers on production hardening and testing
 
