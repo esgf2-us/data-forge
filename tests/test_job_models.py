@@ -171,6 +171,21 @@ def test_job_submission_uses_env_default_for_local_output(
     assert sub.output_path == "/tmp/from-env"
 
 
+def test_job_submission_uses_env_default_for_s3_output(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from dataforge.models.job import JobSubmission
+
+    monkeypatch.setenv("DATAFORGE_S3_OUTPUT_PATH", "s3://bucket/prefix")
+
+    sub = JobSubmission(
+        input_files=["/tmp/a.nc"],
+        output_mode="s3",
+    )
+
+    assert sub.output_path == "s3://bucket/prefix"
+
+
 def test_job_submission_rejects_missing_local_output_path_without_env() -> None:
     from dataforge.models.job import JobSubmission
 
