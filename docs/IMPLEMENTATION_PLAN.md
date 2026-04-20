@@ -1,7 +1,7 @@
 # Data-Forge Implementation Plan
 
 ## Overview
-This document outlines a staged approach to building Data-Forge, a service for generating Kerchunk reference files and managing catalogs for climate datasets. **Key Architecture**: Data-Forge is a compute service that writes reference files directly to user-specified storage locations (S3 or local filesystem), then optionally appends new assets to existing STAC Items via an ESGF publishing job. The service does NOT provide internal storage; users manage their own file storage infrastructure.
+This document outlines a staged approach to building Data-Forge, a service for generating Kerchunk reference files and managing catalogs for climate datasets. **Key Architecture**: the initial core flow is local input -> generate Kerchunk -> write the reference file alongside the source data on local disk. Additional output destinations (for example S3 and Globus) are future stages. The service does NOT provide internal storage; users manage their own file storage infrastructure.
 
 ---
 
@@ -39,7 +39,7 @@ This document outlines a staged approach to building Data-Forge, a service for g
      - redis, dramatiq
      - dask, distributed
      - pydantic for validation
-     - s3fs, aiohttp for remote I/O
+      - s3fs, aiohttp for future output backends and integrations
      - Click/Typer for CLI
    - Set up Docker development environment
    - Create `.env.example` for configuration
@@ -200,64 +200,46 @@ This document outlines a staged approach to building Data-Forge, a service for g
 
 ---
 
-## Stage 3: Remote Data Source Support (Week 5)
+## Stage 3: Local Workflow Hardening (Week 5)
 
 ### Goals
-- Support fetching data from remote sources (input side)
-- Support writing to S3 and local destinations (output side)
-- **MVP Scope**: S3 and local filesystem only
-- Handle authentication for both input and output
+- Support the core local workflow end to end
+- Read local input files and generate Kerchunk references
+- Write the Kerchunk file locally alongside the source data
+- Keep output naming/layout predictable for later output destinations
 
 ### Tasks
-1. **Data Source Module** (`src/dataforge/core/data_sources.py`)
-   - Implement fsspec-based data fetching for inputs
-   - Support S3 input (s3://)
-   - Support HTTPS input (https://)
-   - Support OpenDAP if needed for ESGF
-   - Handle credentials for input sources
-   - Glob pattern expansion for multiple files
+1. **Local Input Handling**
+   - Expand and validate local file inputs
+   - Support `file://` and plain filesystem paths
+   - Preserve local-only validation in the API and CLI
 
-2. **Output Destinations** (`src/dataforge/core/output_writer.py`)
-   - Extend storage writer from Stage 1
-   - **MVP**: Support S3 output with proper credentials
-   - **MVP**: Support local filesystem output
-   - **MVP**: Support ESGF publish output (server-configured upload + STAC asset update)
-   - Handle S3 authentication (AWS credentials)
-   - Verify write permissions before job execution
-   - Generate S3 URLs for results
+2. **Local Output Layout**
+   - Keep generated Kerchunk files next to the source dataset by default
+   - Define predictable output naming for single-file and multi-file runs
+   - Make overwrites and file existence behavior explicit
 
-3. **Enhanced Converter**
-   - Modify converter to work with remote input sources
-   - Add streaming support for large files
-   - Optimize network I/O
-   - Write directly to remote output destinations
-   - No local staging of final reference files
+3. **Converter Hardening**
+   - Keep converter focused on local input paths
+   - Improve error messages for missing/invalid local files
+   - Ensure the output path is created only where requested
 
-4. **Credential Management**
-   - Support passing S3 credentials for input sources
-   - Support passing output destination credentials
-   - Secure credential storage (environment vars, secrets)
-   - Per-job credential isolation
-
-5. **Configuration**
-   - Add data source configuration to job model
-   - S3 access keys, authentication tokens
-   - Output destination credentials
-   - Region, endpoint configuration
-
-6. **Testing**
-   - Test with public S3 buckets (inputs)
-   - Test writing to test S3 buckets (outputs)
-   - Test with HTTPS endpoints
-   - Mock tests for authentication
-   - Test permission failures gracefully
+4. **Testing**
+   - Test local path validation and output naming
+   - Test write-then-read behavior on local files
+   - Test missing file and permission failure paths
+   - Add fixtures for representative local datasets
 
 ### Deliverables
-- ✅ Remote input data source support (S3, HTTPS, OpenDAP)
-- ✅ S3 output destination support (MVP)
-- ✅ Local filesystem output support (MVP)
-- ✅ ESGF publish output support (MVP)
-- ✅ Authentication handling for S3 input/output
+- ✅ Local input support end to end
+- ✅ Local output written alongside source data
+- ✅ Clear output naming/layout for later output backends
+- ✅ Tests for local workflow validation and failure modes
+
+### Future Output Methods
+- S3 output
+- Globus output
+- ESGF/STAC publish flow
 
 ---
 
@@ -699,10 +681,10 @@ This document outlines a staged approach to building Data-Forge, a service for g
 ### MVP Features Complete
 ✅ Kerchunk conversion service with Dask parallelization  
 ✅ REST API for job management  
-✅ User-specified output paths (S3, local filesystem)  
+✅ User-specified output paths (local filesystem)  
 ✅ Server-configured STAC catalog integration (secure)  
 ✅ Asynchronous job processing with progress tracking  
-✅ Remote input sources (S3, HTTPS, OpenDAP)  
+✅ Local input sources only for the initial core flow  
 ✅ Advanced metadata extraction and validation  
 ✅ Monitoring and observability (Prometheus, structured logging)  
 ✅ Docker + Kubernetes deployment (production-ready)  
@@ -832,12 +814,13 @@ These features are valuable but not required for initial launch. They can be pri
 - API endpoints with authentication
 - Worker job processing end-to-end
 - STAC catalog asset update flow
-- Remote I/O (S3 output, HTTPS/S3/OpenDAP input)
+- Local workflow and output layout
+- Future output adapters (S3/Globus)
 - Globus Auth integration
 - Scheduler integration (with mocks)
 
 ### End-to-End Tests
-- Complete workflows: submit → process → write to user storage → catalog
+- Complete workflows: submit → process → write locally alongside source data
 - CLI workflows matching PRD examples
 - Multi-file conversion with various concat strategies
 - Error scenarios and recovery
@@ -1057,15 +1040,15 @@ These criteria are already captured in the "MVP COMPLETE" section above. Refer t
 ### Key Development Strategies
 
 **1. Parallel Development Opportunities (2-3 developers)**
-- Weeks 5-8: Developer A on remote I/O + Dask, Developer B on STAC integration
+- Weeks 5-8: Developer A on local workflow + Dask, Developer B on STAC integration
 - Weeks 9-12: Developer A on advanced features, Developer B on Kubernetes/Docker/full CLI UX
 - Weeks 13-14: All developers on Globus Auth integration
 - Weeks 15-16: All developers on production hardening and testing
 
 **2. MVP Scope - Production-Ready System**
 - Core conversion with Dask parallelization
-- User-managed storage (S3, local filesystem only for MVP)
-- Server-configured STAC catalog (secure, centralized control)
+- User-managed storage (local filesystem only for MVP)
+- Server-configured STAC catalog (future publish path)
 - Production-ready Kubernetes deployment with Helm
 - Comprehensive monitoring and observability
 - Full authentication (Globus Auth)
