@@ -98,7 +98,6 @@ def test_get_result_before_completed_returns_409_and_includes_status(
         "/api/v1/jobs",
         json={
             "input_files": ["/tmp/input.nc"],
-            "output_path": "/tmp/out",
         },
     )
     job_id = created.json()["id"]
@@ -107,6 +106,28 @@ def test_get_result_before_completed_returns_409_and_includes_status(
     assert res.status_code == 409
     data = res.json()
     assert data["status"] == JobStatus.QUEUED.value
+
+
+def test_get_result_after_completed_returns_result_url(
+    client: tuple[TestClient, FakeJobStore],
+) -> None:
+    c, store = client
+
+    created = c.post(
+        "/api/v1/jobs",
+        json={
+            "input_files": ["/tmp/input.nc"],
+        },
+    )
+    job_id = created.json()["id"]
+
+    store.set_status(job_id, expected=JobStatus.QUEUED, new=JobStatus.RUNNING)
+    store.set_result(job_id, "file:///tmp/from-env/job.json")
+    store.set_status(job_id, expected=JobStatus.RUNNING, new=JobStatus.COMPLETED)
+
+    res = c.get(f"/api/v1/jobs/{job_id}/result")
+    assert res.status_code == 200
+    assert res.json() == {"result_url": "file:///tmp/from-env/job.json"}
 
 
 def test_get_jobs_rejects_invalid_cursor(
