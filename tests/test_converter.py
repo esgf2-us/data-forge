@@ -51,3 +51,48 @@ def test_converter_writes_reference_to_storage(tmp_path, monkeypatch) -> None:
     assert result.output_uri.endswith("/ref.json")
     assert result.reference["version"] == 1
     assert (tmp_path / "ref.json").exists()
+
+
+def test_converter_normalizes_local_input_paths(tmp_path, monkeypatch) -> None:
+    from dataforge.core.converter import KerchunkConverter
+    from dataforge.models.config import ConversionConfig
+
+    in_file = tmp_path / "nested" / "a.nc"
+    in_file.parent.mkdir(parents=True)
+    in_file.touch()
+
+    monkeypatch.chdir(tmp_path)
+
+    cfg = ConversionConfig(output_prefix="./out", output_name="ref")
+
+    def _fake_build_reference(self, inputs, config):
+        return {"inputs": inputs}
+
+    monkeypatch.setattr(KerchunkConverter, "_build_reference", _fake_build_reference)
+
+    result = KerchunkConverter().convert([f"file://{in_file}"], cfg)
+
+    assert result.inputs == [str(in_file.resolve())]
+    assert result.output_uri.endswith("/out/ref.json")
+
+
+def test_converter_accepts_relative_local_inputs(tmp_path, monkeypatch) -> None:
+    from dataforge.core.converter import KerchunkConverter
+    from dataforge.models.config import ConversionConfig
+
+    in_file = tmp_path / "a.nc"
+    in_file.touch()
+
+    monkeypatch.chdir(tmp_path)
+
+    cfg = ConversionConfig(output_prefix="out", output_name="ref")
+
+    def _fake_build_reference(self, inputs, config):
+        return {"inputs": inputs}
+
+    monkeypatch.setattr(KerchunkConverter, "_build_reference", _fake_build_reference)
+
+    result = KerchunkConverter().convert(["a.nc"], cfg)
+
+    assert result.inputs == [str(in_file.resolve())]
+    assert result.output_uri.endswith("/out/ref.json")

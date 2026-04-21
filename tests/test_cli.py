@@ -98,7 +98,7 @@ def test_submit_rejects_invalid_metadata(
     result = runner.invoke(app, ["submit", "--input", "/tmp/a.nc", "--metadata", "{"])
 
     assert result.exit_code != 0
-    assert "--metadata must be valid JSON" in result.stdout
+    assert "--metadata must be valid JSON" in result.stderr
 
 
 def test_status_prints_progress(

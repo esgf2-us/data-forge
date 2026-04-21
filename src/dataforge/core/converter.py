@@ -24,6 +24,7 @@ def _normalize_local_input(uri: str) -> str:
             raise InvalidInputError(f"unsupported input scheme: {parsed.scheme!r}")
         path = Path(uri)
 
+    path = path.expanduser().resolve()
     if not path.exists():
         raise InvalidInputError(f"input file does not exist: {path}")
     return str(path)
@@ -37,10 +38,10 @@ def _join_output(prefix: str, name: str) -> str:
         parsed = urlparse(prefix)
         if parsed.netloc not in ("", "localhost"):
             raise InvalidInputError(f"unsupported file URI netloc: {parsed.netloc!r}")
-        base = Path(unquote(parsed.path))
-        return f"file://{(base / f'{name}.json')}"
+        base = Path(unquote(parsed.path)).expanduser().resolve()
+        return (base / f"{name}.json").as_uri()
 
-    return str(Path(prefix) / f"{name}.json")
+    return str(Path(prefix).expanduser().resolve() / f"{name}.json")
 
 
 class KerchunkConverter:
@@ -58,7 +59,7 @@ class KerchunkConverter:
         self._storage.write_json(output_uri, reference)
 
         return ConversionResult(
-            output_uri=output_uri, reference=reference, inputs=inputs
+            output_uri=output_uri, reference=reference, inputs=local_inputs
         )
 
     def _build_reference(self, inputs: list[str], config: ConversionConfig) -> dict:
