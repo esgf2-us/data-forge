@@ -3,6 +3,8 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 
 def test_storage_writer_writes_local_json(tmp_path: Path) -> None:
     from dataforge.core.storage import StorageWriter
@@ -48,3 +50,32 @@ def test_storage_writer_passes_endpoint_url_for_s3_when_configured() -> None:
     assert kwargs["client_kwargs"]["endpoint_url"] == "http://garage:3900"
     assert kwargs["client_kwargs"]["region_name"] == "garage"
     assert kwargs["config_kwargs"]["s3"]["addressing_style"] == "path"
+
+
+def test_storage_writer_wraps_permission_errors_for_local_outputs(
+    tmp_path: Path,
+) -> None:
+    from dataforge.core.storage import StorageWriter
+    from dataforge.models.config import WriteError
+
+    out = tmp_path / "out" / "ref.json"
+
+    def _deny(*args, **kwargs):
+        raise PermissionError("denied")
+
+    with patch("dataforge.core.storage.fsspec.open", side_effect=_deny):
+        with pytest.raises(WriteError, match="permission denied writing"):
+            StorageWriter().write_json(str(out), {"a": 1})
+
+
+def test_storage_writer_wraps_permission_errors_when_creating_parent_dir(
+    tmp_path: Path,
+) -> None:
+    from dataforge.core.storage import StorageWriter
+    from dataforge.models.config import WriteError
+
+    out = tmp_path / "out" / "ref.json"
+
+    with patch("pathlib.Path.mkdir", side_effect=PermissionError("denied")):
+        with pytest.raises(WriteError, match="permission denied writing"):
+            StorageWriter().write_json(str(out), {"a": 1})
