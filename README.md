@@ -33,6 +33,14 @@ $ data-forge get-url <job-id>
 $ data-forge download <job-id> --output ./local_refs/
 ```
 
+## uv Setup
+
+```bash
+uv venv
+uv sync --all-groups
+uv run pytest -vvv
+```
+
 ## High-Level Architecture
 
 - **API:** FastAPI (REST endpoints), job monitoring/status, OpenAPI docs
