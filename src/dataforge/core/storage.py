@@ -61,5 +61,7 @@ class StorageWriter:
                 f.write(payload)
         except WriteError:
             raise
+        except PermissionError as e:
+            raise WriteError(f"permission denied writing {output_uri}: {e}") from e
         except Exception as e:
             raise WriteError(str(e)) from e

@@ -32,6 +32,26 @@ def test_converter_rejects_non_local_input_schemes(tmp_path) -> None:
         KerchunkConverter().convert(["s3://bucket/a.nc"], cfg)
 
 
+def test_converter_rejects_missing_local_input_file(tmp_path) -> None:
+    from dataforge.core.converter import KerchunkConverter
+    from dataforge.models.config import ConversionConfig, InvalidInputError
+
+    cfg = ConversionConfig(output_prefix=str(tmp_path), output_name="ref")
+
+    with pytest.raises(InvalidInputError, match="input file does not exist"):
+        KerchunkConverter().convert([str(tmp_path / "missing.nc")], cfg)
+
+
+def test_converter_rejects_missing_file_uri_input(tmp_path) -> None:
+    from dataforge.core.converter import KerchunkConverter
+    from dataforge.models.config import ConversionConfig, InvalidInputError
+
+    cfg = ConversionConfig(output_prefix=str(tmp_path), output_name="ref")
+
+    with pytest.raises(InvalidInputError, match="input file does not exist"):
+        KerchunkConverter().convert([f"file://{tmp_path / 'missing.nc'}"], cfg)
+
+
 def test_converter_writes_reference_to_storage(tmp_path, monkeypatch) -> None:
     from dataforge.core.converter import KerchunkConverter
     from dataforge.models.config import ConversionConfig
