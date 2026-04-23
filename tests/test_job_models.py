@@ -49,7 +49,7 @@ def test_job_submission_defaults() -> None:
 def test_job_submission_rejects_remote_input_scheme() -> None:
     from dataforge.models.job import JobSubmission
 
-    with pytest.raises(ValidationError, match="local inputs only"):
+    with pytest.raises(ValidationError, match="local paths"):
         JobSubmission(
             input_files=["s3://bucket/a.nc"],
             output_mode="local",
@@ -60,7 +60,7 @@ def test_job_submission_rejects_remote_input_scheme() -> None:
 def test_job_submission_rejects_file_uri_with_host() -> None:
     from dataforge.models.job import JobSubmission
 
-    with pytest.raises(ValidationError, match="local inputs only"):
+    with pytest.raises(ValidationError, match="local paths"):
         JobSubmission(
             input_files=["file://example.com/tmp/a.nc"],
             output_mode="local",
@@ -89,7 +89,7 @@ def test_job_submission_rejects_empty_inputs() -> None:
 def test_job_submission_rejects_empty_input_string() -> None:
     from dataforge.models.job import JobSubmission
 
-    with pytest.raises(ValidationError, match="local inputs only"):
+    with pytest.raises(ValidationError, match="local paths"):
         JobSubmission(
             input_files=[""],
             output_mode="local",
@@ -100,7 +100,7 @@ def test_job_submission_rejects_empty_input_string() -> None:
 def test_job_submission_rejects_network_path_inputs() -> None:
     from dataforge.models.job import JobSubmission
 
-    with pytest.raises(ValidationError, match="local inputs only"):
+    with pytest.raises(ValidationError, match="local paths"):
         JobSubmission(
             input_files=["//example.com/tmp/a.nc"],
             output_mode="local",
@@ -186,11 +186,35 @@ def test_job_submission_uses_env_default_for_s3_output(
     assert sub.output_path == "s3://bucket/prefix"
 
 
-def test_job_submission_rejects_missing_local_output_path_without_env() -> None:
+def test_job_submission_defaults_local_output_path_to_source_directory(
+    tmp_path,
+) -> None:
     from dataforge.models.job import JobSubmission
 
-    with pytest.raises(ValidationError, match="output_path must be non-empty"):
-        JobSubmission(
-            input_files=["/tmp/a.nc"],
-            output_mode="local",
-        )
+    in_file = tmp_path / "nested" / "a.nc"
+    in_file.parent.mkdir(parents=True)
+    in_file.touch()
+
+    sub = JobSubmission(
+        input_files=[str(in_file)],
+        output_mode="local",
+    )
+
+    assert sub.output_path == str(in_file.parent.resolve())
+
+
+def test_job_submission_defaults_local_output_path_for_file_uri_input(
+    tmp_path,
+) -> None:
+    from dataforge.models.job import JobSubmission
+
+    in_file = tmp_path / "nested" / "a.nc"
+    in_file.parent.mkdir(parents=True)
+    in_file.touch()
+
+    sub = JobSubmission(
+        input_files=[f"file://localhost{in_file}"],
+        output_mode="local",
+    )
+
+    assert sub.output_path == str(in_file.parent.resolve())

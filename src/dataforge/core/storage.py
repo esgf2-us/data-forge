@@ -29,6 +29,8 @@ class StorageWriter:
         try:
             file_path = _file_uri_to_path(output_uri)
             if file_path is not None:
+                if file_path.exists():
+                    raise WriteError(f"output already exists: {file_path}")
                 file_path.parent.mkdir(parents=True, exist_ok=True)
                 with fsspec.open(str(file_path), "wb") as f:
                     f.write(payload)
@@ -56,6 +58,8 @@ class StorageWriter:
                 return
 
             local_path = Path(output_uri)
+            if local_path.exists():
+                raise WriteError(f"output already exists: {local_path}")
             local_path.parent.mkdir(parents=True, exist_ok=True)
             with fsspec.open(str(local_path), "wb") as f:
                 f.write(payload)
