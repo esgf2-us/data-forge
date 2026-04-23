@@ -84,7 +84,7 @@ def _copy_samples(output_dir: Path) -> dict[str, list[dict[str, str]]]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Download CMIP6 sample data for Stage 1 benchmarks"
+        description="Download CMIP6 sample data for benchmarks"
     )
     parser.add_argument(
         "--output-dir",

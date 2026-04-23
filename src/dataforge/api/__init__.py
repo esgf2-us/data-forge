@@ -1,1 +1,1 @@
-"""FastAPI app for the Stage 2 job queue API."""
+"""FastAPI app for the job queue API."""
