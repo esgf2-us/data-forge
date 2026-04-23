@@ -16,6 +16,18 @@ def test_storage_writer_writes_local_json(tmp_path: Path) -> None:
     assert json.loads(out.read_text("utf-8")) == {"a": 1}
 
 
+def test_storage_writer_rejects_overwriting_local_json(tmp_path: Path) -> None:
+    from dataforge.core.storage import StorageWriter
+    from dataforge.models.config import WriteError
+
+    out = tmp_path / "out" / "ref.json"
+    out.parent.mkdir(parents=True)
+    out.write_text("{}", encoding="utf-8")
+
+    with pytest.raises(WriteError, match="output already exists"):
+        StorageWriter().write_json(str(out), {"a": 1})
+
+
 def test_storage_writer_supports_file_uri_outputs(tmp_path: Path) -> None:
     from dataforge.core.storage import StorageWriter
 

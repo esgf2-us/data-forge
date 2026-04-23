@@ -2,12 +2,27 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
+from pathlib import Path
 from typing import Any, Literal
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from dataforge.settings import local_output_path, s3_output_path
+
+
+def _local_path_from_input(value: str) -> Path:
+    if value.startswith("file://"):
+        parsed = urlparse(value)
+        if parsed.netloc not in ("", "localhost"):
+            raise ValueError("input_files must reference local paths")
+        path = Path(unquote(parsed.path))
+    else:
+        parsed = urlparse(value)
+        if parsed.scheme:
+            raise ValueError("input_files must reference local paths")
+        path = Path(value)
+    return path.expanduser().resolve()
 
 
 class JobStatus(StrEnum):
@@ -36,16 +51,16 @@ class JobCreateRequest(BaseModel):
             raise ValueError("input_files must be non-empty")
         for item in v:
             if not item:
-                raise ValueError("Stage 2 supports local inputs only")
+                raise ValueError("input_files must reference local paths")
             p = urlparse(item)
             if p.scheme and p.scheme != "file":
-                raise ValueError("Stage 2 supports local inputs only")
+                raise ValueError("input_files must reference local paths")
             if not p.scheme and p.netloc:
-                raise ValueError("Stage 2 supports local inputs only")
+                raise ValueError("input_files must reference local paths")
             if p.scheme == "file" and p.netloc not in ("", "localhost"):
-                raise ValueError("Stage 2 supports local inputs only")
+                raise ValueError("input_files must reference local paths")
             if p.scheme == "file" and not p.path:
-                raise ValueError("Stage 2 supports local inputs only")
+                raise ValueError("input_files must reference local paths")
         return v
 
     @field_validator("inline_threshold")
@@ -77,16 +92,16 @@ class JobSubmission(BaseModel):
             raise ValueError("input_files must be non-empty")
         for item in v:
             if not item:
-                raise ValueError("Stage 2 supports local inputs only")
+                raise ValueError("input_files must reference local paths")
             p = urlparse(item)
             if p.scheme and p.scheme != "file":
-                raise ValueError("Stage 2 supports local inputs only")
+                raise ValueError("input_files must reference local paths")
             if not p.scheme and p.netloc:
-                raise ValueError("Stage 2 supports local inputs only")
+                raise ValueError("input_files must reference local paths")
             if p.scheme == "file" and p.netloc not in ("", "localhost"):
-                raise ValueError("Stage 2 supports local inputs only")
+                raise ValueError("input_files must reference local paths")
             if p.scheme == "file" and not p.path:
-                raise ValueError("Stage 2 supports local inputs only")
+                raise ValueError("input_files must reference local paths")
         return v
 
     @field_validator("inline_threshold")
@@ -102,6 +117,8 @@ class JobSubmission(BaseModel):
 
         if self.output_mode == "local" and output_path is None:
             output_path = local_output_path()
+            if output_path is None:
+                output_path = str(_local_path_from_input(self.input_files[0]).parent)
         if self.output_mode == "s3" and output_path is None:
             output_path = s3_output_path()
 

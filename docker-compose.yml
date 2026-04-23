@@ -12,7 +12,6 @@ services:
       - "8000:8000"
     environment:
       DATAFORGE_BROKER_REDIS_URL: redis://redis:6379/0
-      DATAFORGE_LOCAL_OUTPUT_PATH: /data/kerchunks
       DATAFORGE_OUTPUT_MODE: local
       DATAFORGE_REDIS_URL: redis://redis:6379/1
     volumes:
@@ -26,7 +25,6 @@ services:
       - redis
     environment:
       DATAFORGE_BROKER_REDIS_URL: redis://redis:6379/0
-      DATAFORGE_LOCAL_OUTPUT_PATH: /data/kerchunks
       DATAFORGE_OUTPUT_MODE: local
       DATAFORGE_REDIS_URL: redis://redis:6379/1
     volumes:
