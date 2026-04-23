@@ -42,9 +42,7 @@ def benchmark(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Benchmark Stage 1 Kerchunk conversion"
-    )
+    parser = argparse.ArgumentParser(description="Benchmark Kerchunk conversion")
     parser.add_argument(
         "--single",
         nargs="+",
