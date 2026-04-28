@@ -59,6 +59,7 @@ uv run pytest -vvv
 ## Deployment
 
 - Docker Compose for local/single-node deployment
+- Local output overlay: `docker compose -f docker-compose.yml -f docker-compose.local.yml up`
 - Helm chart for Kubernetes (production, scalable)
 - Minimal required services: API, worker(s), Redis
 
