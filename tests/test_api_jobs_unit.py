@@ -82,6 +82,23 @@ def test_post_rejects_client_supplied_output_mode(
     assert res.status_code == 422
 
 
+def test_post_rejects_unsafe_output_name(
+    client: tuple[TestClient, FakeJobStore], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    c, _store = client
+    monkeypatch.setenv("DATAFORGE_LOCAL_OUTPUT_PATH", "/tmp/from-env")
+
+    res = c.post(
+        "/api/v1/jobs",
+        json={
+            "input_files": ["/tmp/input.nc"],
+            "output_name": "../refs",
+        },
+    )
+
+    assert res.status_code == 422
+
+
 def test_get_missing_returns_404(client: tuple[TestClient, FakeJobStore]) -> None:
     c, _store = client
 

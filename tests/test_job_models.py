@@ -14,6 +14,16 @@ def test_job_create_request_defaults() -> None:
     assert req.metadata is None
 
 
+def test_job_create_request_rejects_unsafe_output_name() -> None:
+    from dataforge.models.job import JobCreateRequest
+
+    with pytest.raises(ValidationError, match="path separators"):
+        JobCreateRequest(input_files=["/tmp/a.nc"], output_name="../refs")
+
+    with pytest.raises(ValidationError, match=".json suffix"):
+        JobCreateRequest(input_files=["/tmp/a.nc"], output_name="refs.json")
+
+
 def test_job_create_request_rejects_output_path_field() -> None:
     from dataforge.models.job import JobCreateRequest
 
@@ -44,6 +54,26 @@ def test_job_submission_defaults() -> None:
     assert sub.identical_dims is None
     assert sub.inline_threshold == 300
     assert sub.metadata is None
+
+
+def test_job_submission_rejects_unsafe_output_name() -> None:
+    from dataforge.models.job import JobSubmission
+
+    with pytest.raises(ValidationError, match="path separators"):
+        JobSubmission(
+            input_files=["/tmp/a.nc"],
+            output_mode="local",
+            output_path="/tmp/out",
+            output_name="refs/unsafe",
+        )
+
+    with pytest.raises(ValidationError, match=".json suffix"):
+        JobSubmission(
+            input_files=["/tmp/a.nc"],
+            output_mode="local",
+            output_path="/tmp/out",
+            output_name="refs.json",
+        )
 
 
 def test_job_submission_rejects_remote_input_scheme() -> None:
