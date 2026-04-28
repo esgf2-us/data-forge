@@ -11,6 +11,18 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from dataforge.settings import local_output_path, s3_output_path
 
 
+def _validate_output_name(value: str | None) -> str | None:
+    if value is None:
+        return None
+    if not value:
+        raise ValueError("output_name must be non-empty")
+    if "/" in value or "\\" in value:
+        raise ValueError("output_name must not contain path separators")
+    if value.endswith(".json"):
+        raise ValueError("output_name must not include .json suffix")
+    return value
+
+
 def _local_path_from_input(value: str) -> Path:
     if value.startswith("file://"):
         parsed = urlparse(value)
@@ -43,6 +55,11 @@ class JobCreateRequest(BaseModel):
     identical_dims: list[str] | None = None
     inline_threshold: int = 300
     metadata: dict[str, Any] | None = None
+
+    @field_validator("output_name")
+    @classmethod
+    def _validate_output_name(cls, v: str | None) -> str | None:
+        return _validate_output_name(v)
 
     @field_validator("input_files")
     @classmethod
@@ -85,6 +102,11 @@ class JobSubmission(BaseModel):
     inline_threshold: int = 300
     metadata: dict[str, Any] | None = None
 
+    @field_validator("output_name")
+    @classmethod
+    def _validate_output_name(cls, v: str | None) -> str | None:
+        return _validate_output_name(v)
+
     @field_validator("input_files")
     @classmethod
     def _validate_inputs_are_local(cls, v: list[str]) -> list[str]:
@@ -113,7 +135,12 @@ class JobSubmission(BaseModel):
 
     @model_validator(mode="after")
     def _validate_output_mode_path(self) -> "JobSubmission":
-        output_path = self.output_path.strip() if self.output_path else None
+        if self.output_path is not None:
+            output_path = self.output_path.strip()
+            if not output_path:
+                raise ValueError("output_path must be non-empty")
+        else:
+            output_path = None
 
         if self.output_mode == "local" and output_path is None:
             output_path = local_output_path()
