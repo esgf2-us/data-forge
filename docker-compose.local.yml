@@ -1,0 +1,8 @@
+services:
+  api:
+    environment:
+      DATAFORGE_LOCAL_OUTPUT_PATH: /data/kerchunks
+
+  worker:
+    environment:
+      DATAFORGE_LOCAL_OUTPUT_PATH: /data/kerchunks
