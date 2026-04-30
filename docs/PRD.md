@@ -212,14 +212,14 @@ Status: queued
 
 # Write to local filesystem
 $ data-forge submit \
-  --input "s3://my-data/dataset/*.nc" \
-  --dataset-id "my.dataset.id" \
-  --output-path "./kerchunk_refs/"
+  --input "/data/source/dataset_001.nc" \
+  --input "/data/source/dataset_002.nc" \
+  --output-name "dataset" \
+  --overwrite-existing
 
 # ESGF publish (upload + update existing STAC Item asset)
 $ data-forge submit \
   --input "s3://my-data/dataset/*.nc" \
-  --dataset-id "my.dataset.id" \
   --esgf-publish \
   --stac-collection-id "cmip6" \
   --stac-item-id "my.dataset.id" \
