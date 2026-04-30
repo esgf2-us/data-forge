@@ -215,9 +215,10 @@ This document outlines a staged approach to building Data-Forge, a service for g
    - Preserve local-only validation in the API and CLI
 
 2. **Local Output Layout**
-   - Keep generated Kerchunk files next to the source dataset by default
-   - Define predictable output naming for single-file and multi-file runs
-   - Make overwrites and file existence behavior explicit
+    - Keep generated Kerchunk files next to the source dataset by default
+    - Define predictable output naming for single-file and multi-file runs
+    - When `output_name` is omitted, derive a stable local stem from the input file name(s)
+    - Make overwrites and file existence behavior explicit (`overwrite_existing`, default false)
 
 3. **Converter Hardening**
    - Keep converter focused on local input paths
