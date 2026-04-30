@@ -35,7 +35,7 @@ def test_redis_job_store_roundtrip() -> None:
 
     assert got.id == job.id
     assert got.status == JobStatus.QUEUED
-    assert got.submission.output_name == job.id
+    assert got.submission.output_name is None
     assert got.updated_at >= got.created_at
 
 

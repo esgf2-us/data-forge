@@ -12,6 +12,7 @@ def test_job_create_request_defaults() -> None:
     assert req.identical_dims is None
     assert req.inline_threshold == 300
     assert req.metadata is None
+    assert req.overwrite_existing is False
 
 
 def test_job_create_request_rejects_unsafe_output_name() -> None:
@@ -54,6 +55,7 @@ def test_job_submission_defaults() -> None:
     assert sub.identical_dims is None
     assert sub.inline_threshold == 300
     assert sub.metadata is None
+    assert sub.overwrite_existing is False
 
 
 def test_job_submission_rejects_unsafe_output_name() -> None:
@@ -248,3 +250,20 @@ def test_job_submission_defaults_local_output_path_for_file_uri_input(
     )
 
     assert sub.output_path == str(in_file.parent.resolve())
+
+
+def test_local_output_defaults_are_predictable_for_multi_file_inputs(tmp_path) -> None:
+    from dataforge.models.job import (
+        default_local_output_directory,
+        default_local_output_name,
+    )
+
+    in_dir = tmp_path / "nested"
+    in_dir.mkdir()
+    in1 = in_dir / "dataset_001.nc"
+    in2 = in_dir / "dataset_002.nc"
+    in1.touch()
+    in2.touch()
+
+    assert default_local_output_directory([str(in1), str(in2)]) == str(in_dir.resolve())
+    assert default_local_output_name([str(in1), str(in2)]) == "dataset"

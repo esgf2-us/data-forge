@@ -90,6 +90,31 @@ def test_submit_prints_job_summary_and_sends_payload(
     }
 
 
+def test_submit_can_enable_overwrite_existing(
+    monkeypatch: pytest.MonkeyPatch, runner: CliRunner
+) -> None:
+    stub = StubClient()
+    monkeypatch.setattr("dataforge.cli.main._client", lambda: stub)
+
+    result = runner.invoke(
+        app,
+        [
+            "submit",
+            "--input",
+            "/tmp/a.nc",
+            "--overwrite-existing",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert stub.created_payload == {
+        "input_files": ["/tmp/a.nc"],
+        "concat_dims": ["time"],
+        "inline_threshold": 300,
+        "overwrite_existing": True,
+    }
+
+
 def test_submit_rejects_invalid_metadata(
     monkeypatch: pytest.MonkeyPatch, runner: CliRunner
 ) -> None:

@@ -65,6 +65,25 @@ def test_post_uses_env_default_local_output_path(
     assert store.get(job_id).submission.output_mode == "local"
 
 
+def test_post_can_enable_overwrite_existing(
+    client: tuple[TestClient, FakeJobStore], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    c, store = client
+    monkeypatch.setenv("DATAFORGE_LOCAL_OUTPUT_PATH", "/tmp/from-env")
+
+    res = c.post(
+        "/api/v1/jobs",
+        json={
+            "input_files": ["/tmp/input.nc"],
+            "overwrite_existing": True,
+        },
+    )
+
+    assert res.status_code == 201
+    job_id = res.json()["id"]
+    assert store.get(job_id).submission.overwrite_existing is True
+
+
 def test_post_rejects_client_supplied_output_mode(
     client: tuple[TestClient, FakeJobStore], monkeypatch: pytest.MonkeyPatch
 ) -> None:

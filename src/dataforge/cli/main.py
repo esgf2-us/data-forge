@@ -49,6 +49,13 @@ def submit(
     metadata: Annotated[
         str | None, typer.Option("--metadata", help="JSON object metadata.")
     ] = None,
+    overwrite_existing: Annotated[
+        bool,
+        typer.Option(
+            "--overwrite-existing",
+            help="Overwrite existing output files when present.",
+        ),
+    ] = False,
     as_json: Annotated[
         bool, typer.Option("--json", help="Print the full API response as JSON.")
     ] = False,
@@ -67,6 +74,8 @@ def submit(
             payload["metadata"] = json.loads(metadata)
         except json.JSONDecodeError as e:
             raise typer.BadParameter("--metadata must be valid JSON") from e
+    if overwrite_existing:
+        payload["overwrite_existing"] = True
 
     job = _client().create_job(payload)
     if as_json:

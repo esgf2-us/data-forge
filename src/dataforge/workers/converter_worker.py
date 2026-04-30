@@ -11,7 +11,7 @@ from dataforge.core.converter import KerchunkConverter
 from dataforge.job_store.base import JobStore
 from dataforge.job_store.redis import RedisJobStore
 from dataforge.models.config import ConversionConfig
-from dataforge.models.job import JobStatus
+from dataforge.models.job import JobStatus, default_local_output_name
 from dataforge.settings import redis_broker_url, redis_jobstore_url
 
 
@@ -79,9 +79,15 @@ def run_job(store: JobStore, job_id: str) -> None:
 
     try:
         submission = store.get(job_id).submission
+        output_name = submission.output_name
+        if output_name is None and submission.output_mode == "local":
+            output_name = default_local_output_name(submission.input_files)
+        if output_name is None:
+            output_name = job_id
+
         cfg = ConversionConfig(
             output_prefix=submission.output_path,
-            output_name=submission.output_name or job_id,
+            output_name=output_name,
             inline_threshold=submission.inline_threshold,
             concat_dims=list(submission.concat_dims),
             identical_dims=(
@@ -89,6 +95,7 @@ def run_job(store: JobStore, job_id: str) -> None:
                 if submission.identical_dims is not None
                 else None
             ),
+            overwrite_existing=submission.overwrite_existing,
         )
 
         converter = KerchunkConverter()

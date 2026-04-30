@@ -145,8 +145,6 @@ class RedisJobStore(JobStore):
 
     def create(self, submission: JobSubmission) -> Job:
         job_id = f"job-{uuid4()}"
-        if submission.output_name is None:
-            submission = submission.model_copy(update={"output_name": job_id})
 
         now = _now()
         now_ms = _ms(now)

@@ -56,7 +56,9 @@ class KerchunkConverter:
         output_uri = _join_output(config.output_prefix, config.output_name)
 
         reference = self._build_reference(local_inputs, config)
-        self._storage.write_json(output_uri, reference)
+        self._storage.write_json(
+            output_uri, reference, overwrite=config.overwrite_existing
+        )
 
         return ConversionResult(
             output_uri=output_uri, reference=reference, inputs=local_inputs
