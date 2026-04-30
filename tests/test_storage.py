@@ -28,6 +28,20 @@ def test_storage_writer_rejects_overwriting_local_json(tmp_path: Path) -> None:
         StorageWriter().write_json(str(out), {"a": 1})
 
 
+def test_storage_writer_allows_overwriting_local_json_when_enabled(
+    tmp_path: Path,
+) -> None:
+    from dataforge.core.storage import StorageWriter
+
+    out = tmp_path / "out" / "ref.json"
+    out.parent.mkdir(parents=True)
+    out.write_text("{}", encoding="utf-8")
+
+    StorageWriter().write_json(str(out), {"a": 1}, overwrite=True)
+
+    assert json.loads(out.read_text("utf-8")) == {"a": 1}
+
+
 def test_storage_writer_supports_file_uri_outputs(tmp_path: Path) -> None:
     from dataforge.core.storage import StorageWriter
 

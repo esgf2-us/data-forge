@@ -23,22 +23,26 @@ def _file_uri_to_path(uri: str) -> Path | None:
 
 
 class StorageWriter:
-    def write_json(self, output_uri: str, data: dict[str, Any]) -> None:
+    def write_json(
+        self, output_uri: str, data: dict[str, Any], overwrite: bool = False
+    ) -> None:
         payload = json.dumps(data).encode("utf-8")
 
         try:
             file_path = _file_uri_to_path(output_uri)
             if file_path is not None:
-                if file_path.exists():
+                if file_path.exists() and not overwrite:
                     raise WriteError(f"output already exists: {file_path}")
                 file_path.parent.mkdir(parents=True, exist_ok=True)
+                if overwrite and file_path.exists():
+                    file_path.unlink()
                 with fsspec.open(str(file_path), "wb") as f:
                     f.write(payload)
                 return
 
             if output_uri.startswith("s3://"):
-                endpoint = s3_endpoint_url()
                 storage_options: dict[str, Any] = {}
+                endpoint = s3_endpoint_url()
                 if endpoint:
                     # Garage needs path-style addressing and a custom endpoint.
                     storage_options = {
@@ -58,9 +62,11 @@ class StorageWriter:
                 return
 
             local_path = Path(output_uri)
-            if local_path.exists():
+            if local_path.exists() and not overwrite:
                 raise WriteError(f"output already exists: {local_path}")
             local_path.parent.mkdir(parents=True, exist_ok=True)
+            if overwrite and local_path.exists():
+                local_path.unlink()
             with fsspec.open(str(local_path), "wb") as f:
                 f.write(payload)
         except WriteError:

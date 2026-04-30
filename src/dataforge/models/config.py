@@ -28,6 +28,7 @@ class ConversionConfig(BaseModel):
     inline_threshold: int = 300
     concat_dims: list[str] = Field(default_factory=lambda: ["time"])
     identical_dims: list[str] | None = None
+    overwrite_existing: bool = False
 
     @field_validator("output_name")
     @classmethod

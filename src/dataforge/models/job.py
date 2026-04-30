@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
@@ -21,6 +22,28 @@ def _validate_output_name(value: str | None) -> str | None:
     if value.endswith(".json"):
         raise ValueError("output_name must not include .json suffix")
     return value
+
+
+def default_local_output_directory(input_files: list[str]) -> str:
+    if not input_files:
+        raise ValueError("input_files must be non-empty")
+
+    parents = [_local_path_from_input(value).parent for value in input_files]
+    if len(parents) == 1:
+        return str(parents[0])
+    return os.path.commonpath([str(parent) for parent in parents])
+
+
+def default_local_output_name(input_files: list[str]) -> str:
+    if not input_files:
+        raise ValueError("input_files must be non-empty")
+
+    stems = [_local_path_from_input(value).stem or "reference" for value in input_files]
+    if len(stems) == 1:
+        return stems[0]
+
+    prefix = os.path.commonprefix(stems).rstrip("._-0123456789")
+    return prefix or stems[0]
 
 
 def _local_path_from_input(value: str) -> Path:
@@ -50,6 +73,7 @@ class JobCreateRequest(BaseModel):
 
     input_files: list[str]
     output_name: str | None = None
+    overwrite_existing: bool = False
 
     concat_dims: list[str] = Field(default_factory=lambda: ["time"])
     identical_dims: list[str] | None = None
@@ -96,6 +120,7 @@ class JobSubmission(BaseModel):
     output_mode: Literal["local", "s3"]
     output_path: str | None = None
     output_name: str | None = None
+    overwrite_existing: bool = False
 
     concat_dims: list[str] = Field(default_factory=lambda: ["time"])
     identical_dims: list[str] | None = None
@@ -145,7 +170,7 @@ class JobSubmission(BaseModel):
         if self.output_mode == "local" and output_path is None:
             output_path = local_output_path()
             if output_path is None:
-                output_path = str(_local_path_from_input(self.input_files[0]).parent)
+                output_path = default_local_output_directory(self.input_files)
         if self.output_mode == "s3" and output_path is None:
             output_path = s3_output_path()
 

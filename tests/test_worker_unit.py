@@ -53,6 +53,72 @@ def test_run_job_sets_running_progress_and_completes_with_file_result_url(
     assert "worker job result stored" in caplog.text
 
 
+def test_run_job_uses_local_defaults_when_output_name_is_missing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from dataforge.core.converter import KerchunkConverter
+    from dataforge.workers.converter_worker import run_job
+
+    in_file = tmp_path / "dataset_001.nc"
+    in_file.write_bytes(b"dummy")
+
+    out_dir = tmp_path / "out"
+    store = FakeJobStore()
+    job = store.create(
+        JobSubmission(
+            input_files=[str(in_file)],
+            output_mode="local",
+            output_path=str(out_dir),
+        )
+    )
+
+    expected_output = out_dir / "dataset_001.json"
+
+    def _fake_convert(self, inputs, config):
+        assert config.output_name == "dataset_001"
+        expected_output.parent.mkdir(parents=True, exist_ok=True)
+        expected_output.write_text("{}", encoding="utf-8")
+        return str(expected_output)
+
+    monkeypatch.setattr(KerchunkConverter, "convert", _fake_convert)
+
+    run_job(store, job.id)
+
+    got = store.get(job.id)
+    assert got.status == JobStatus.COMPLETED
+    assert got.result_url == expected_output.resolve().as_uri()
+
+
+def test_run_job_forwards_overwrite_existing_flag(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from dataforge.core.converter import KerchunkConverter
+    from dataforge.workers.converter_worker import run_job
+
+    in_file = tmp_path / "dataset_001.nc"
+    in_file.write_bytes(b"dummy")
+
+    store = FakeJobStore()
+    job = store.create(
+        JobSubmission(
+            input_files=[str(in_file)],
+            output_mode="local",
+            output_path=str(tmp_path / "out"),
+            overwrite_existing=True,
+        )
+    )
+
+    def _fake_convert(self, inputs, config):
+        assert config.overwrite_existing is True
+        return str(tmp_path / "out" / "dataset_001.json")
+
+    monkeypatch.setattr(KerchunkConverter, "convert", _fake_convert)
+
+    run_job(store, job.id)
+
+    assert store.get(job.id).status == JobStatus.COMPLETED
+
+
 def test_run_job_is_noop_when_already_running(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

@@ -18,7 +18,7 @@ def test_create_and_get_roundtrip() -> None:
 
     assert job.id.startswith("job-")
     assert job.status == JobStatus.QUEUED
-    assert job.submission.output_name == job.id
+    assert job.submission.output_name is None
     assert job.started_at is None
     assert job.completed_at is None
     assert job.updated_at >= job.created_at

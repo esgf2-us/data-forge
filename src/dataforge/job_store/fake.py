@@ -18,9 +18,6 @@ class FakeJobStore:
         now = datetime.now(timezone.utc)
         job_id = f"job-{uuid4()}"
 
-        if submission.output_name is None:
-            submission = submission.model_copy(update={"output_name": job_id})
-
         job = Job(
             id=job_id,
             status=JobStatus.QUEUED,
