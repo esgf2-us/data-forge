@@ -11,7 +11,7 @@ from dataforge.models.job import JobStatus, JobSubmission
 def test_run_job_sets_running_progress_and_completes_with_file_result_url(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
-    from dataforge.core.converter import KerchunkConverter
+    from dataforge.core.dask_converter import DaskConverter
     from dataforge.workers.converter_worker import run_job
 
     in_file1 = tmp_path / "in1.nc"
@@ -32,13 +32,17 @@ def test_run_job_sets_running_progress_and_completes_with_file_result_url(
 
     expected_output = out_dir / "job-out.json"
 
-    def _fake_convert(self, inputs, config):
+    def _fake_convert(self, inputs, config, on_progress=None):
         # Simulate writing the conversion output.
         expected_output.parent.mkdir(parents=True, exist_ok=True)
         expected_output.write_text("{}", encoding="utf-8")
-        return str(expected_output)
+        from dataforge.models.config import ConversionResult
 
-    monkeypatch.setattr(KerchunkConverter, "convert", _fake_convert)
+        return ConversionResult(
+            output_uri=str(expected_output), reference={}, inputs=inputs
+        )
+
+    monkeypatch.setattr(DaskConverter, "convert", _fake_convert)
     caplog.set_level("INFO")
 
     run_job(store, job.id)
@@ -56,7 +60,7 @@ def test_run_job_sets_running_progress_and_completes_with_file_result_url(
 def test_run_job_uses_local_defaults_when_output_name_is_missing(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    from dataforge.core.converter import KerchunkConverter
+    from dataforge.core.dask_converter import DaskConverter
     from dataforge.workers.converter_worker import run_job
 
     in_file = tmp_path / "dataset_001.nc"
@@ -74,13 +78,17 @@ def test_run_job_uses_local_defaults_when_output_name_is_missing(
 
     expected_output = out_dir / "dataset_001.json"
 
-    def _fake_convert(self, inputs, config):
+    def _fake_convert(self, inputs, config, on_progress=None):
         assert config.output_name == "dataset_001"
         expected_output.parent.mkdir(parents=True, exist_ok=True)
         expected_output.write_text("{}", encoding="utf-8")
-        return str(expected_output)
+        from dataforge.models.config import ConversionResult
 
-    monkeypatch.setattr(KerchunkConverter, "convert", _fake_convert)
+        return ConversionResult(
+            output_uri=str(expected_output), reference={}, inputs=inputs
+        )
+
+    monkeypatch.setattr(DaskConverter, "convert", _fake_convert)
 
     run_job(store, job.id)
 
@@ -92,7 +100,7 @@ def test_run_job_uses_local_defaults_when_output_name_is_missing(
 def test_run_job_forwards_overwrite_existing_flag(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    from dataforge.core.converter import KerchunkConverter
+    from dataforge.core.dask_converter import DaskConverter
     from dataforge.workers.converter_worker import run_job
 
     in_file = tmp_path / "dataset_001.nc"
@@ -108,11 +116,17 @@ def test_run_job_forwards_overwrite_existing_flag(
         )
     )
 
-    def _fake_convert(self, inputs, config):
+    def _fake_convert(self, inputs, config, on_progress=None):
         assert config.overwrite_existing is True
-        return str(tmp_path / "out" / "dataset_001.json")
+        from dataforge.models.config import ConversionResult
 
-    monkeypatch.setattr(KerchunkConverter, "convert", _fake_convert)
+        return ConversionResult(
+            output_uri=str(tmp_path / "out" / "dataset_001.json"),
+            reference={},
+            inputs=inputs,
+        )
+
+    monkeypatch.setattr(DaskConverter, "convert", _fake_convert)
 
     run_job(store, job.id)
 
@@ -122,7 +136,7 @@ def test_run_job_forwards_overwrite_existing_flag(
 def test_run_job_is_noop_when_already_running(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    from dataforge.core.converter import KerchunkConverter
+    from dataforge.core.dask_converter import DaskConverter
     from dataforge.workers.converter_worker import run_job
 
     in_file = tmp_path / "in.nc"
@@ -139,10 +153,10 @@ def test_run_job_is_noop_when_already_running(
     )
     store.set_status(job.id, expected=JobStatus.QUEUED, new=JobStatus.RUNNING)
 
-    def _should_not_run(self, inputs, config):
+    def _should_not_run(self, inputs, config, on_progress=None):
         raise AssertionError("convert should not be called for already running jobs")
 
-    monkeypatch.setattr(KerchunkConverter, "convert", _should_not_run)
+    monkeypatch.setattr(DaskConverter, "convert", _should_not_run)
 
     run_job(store, job.id)
 
@@ -152,7 +166,7 @@ def test_run_job_is_noop_when_already_running(
 def test_run_job_cancelled_before_start_has_precedence(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    from dataforge.core.converter import KerchunkConverter
+    from dataforge.core.dask_converter import DaskConverter
     from dataforge.workers.converter_worker import run_job
 
     in_file = tmp_path / "in.nc"
@@ -169,10 +183,10 @@ def test_run_job_cancelled_before_start_has_precedence(
     )
     store.set_status(job.id, expected=JobStatus.QUEUED, new=JobStatus.CANCELLED)
 
-    def _should_not_run(self, inputs, config):
+    def _should_not_run(self, inputs, config, on_progress=None):
         raise AssertionError("convert should not be called for cancelled jobs")
 
-    monkeypatch.setattr(KerchunkConverter, "convert", _should_not_run)
+    monkeypatch.setattr(DaskConverter, "convert", _should_not_run)
 
     run_job(store, job.id)
 
@@ -184,7 +198,7 @@ def test_run_job_cancelled_before_start_has_precedence(
 def test_run_job_cancelled_during_conversion_does_not_write_completed(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    from dataforge.core.converter import KerchunkConverter
+    from dataforge.core.dask_converter import DaskConverter
     from dataforge.workers.converter_worker import run_job
 
     in_file = tmp_path / "in.nc"
@@ -203,14 +217,18 @@ def test_run_job_cancelled_during_conversion_does_not_write_completed(
 
     expected_output = out_dir / "job-out.json"
 
-    def _fake_convert(self, inputs, config):
+    def _fake_convert(self, inputs, config, on_progress=None):
         # Cancellation happens while conversion is running.
         store.cancel(job.id)
         expected_output.parent.mkdir(parents=True, exist_ok=True)
         expected_output.write_text("{}", encoding="utf-8")
-        return str(expected_output)
+        from dataforge.models.config import ConversionResult
 
-    monkeypatch.setattr(KerchunkConverter, "convert", _fake_convert)
+        return ConversionResult(
+            output_uri=str(expected_output), reference={}, inputs=inputs
+        )
+
+    monkeypatch.setattr(DaskConverter, "convert", _fake_convert)
 
     run_job(store, job.id)
 
@@ -222,7 +240,7 @@ def test_run_job_cancelled_during_conversion_does_not_write_completed(
 def test_run_job_conversion_error_sets_failed_and_error_message(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    from dataforge.core.converter import KerchunkConverter
+    from dataforge.core.dask_converter import DaskConverter
     from dataforge.workers.converter_worker import run_job
 
     in_file = tmp_path / "in.nc"
@@ -238,10 +256,10 @@ def test_run_job_conversion_error_sets_failed_and_error_message(
         )
     )
 
-    def _boom(self, inputs, config):
+    def _boom(self, inputs, config, on_progress=None):
         raise RuntimeError("boom")
 
-    monkeypatch.setattr(KerchunkConverter, "convert", _boom)
+    monkeypatch.setattr(DaskConverter, "convert", _boom)
 
     run_job(store, job.id)
 
