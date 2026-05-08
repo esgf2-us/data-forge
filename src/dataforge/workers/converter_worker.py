@@ -7,12 +7,12 @@ from urllib.parse import unquote, urlparse
 import dramatiq
 from dramatiq.brokers.redis import RedisBroker
 
-from dataforge.core.converter import KerchunkConverter
+from dataforge.core.dask_converter import DaskConverter
 from dataforge.job_store.base import JobStore
 from dataforge.job_store.redis import RedisJobStore
 from dataforge.models.config import ConversionConfig
 from dataforge.models.job import JobStatus, default_local_output_name
-from dataforge.settings import redis_broker_url, redis_jobstore_url
+from dataforge.settings import dask_config, redis_broker_url, redis_jobstore_url
 
 
 logger = logging.getLogger(__name__)
@@ -98,8 +98,17 @@ def run_job(store: JobStore, job_id: str) -> None:
             overwrite_existing=submission.overwrite_existing,
         )
 
-        converter = KerchunkConverter()
-        res = converter.convert(list(submission.input_files), cfg)
+        def _on_progress(done: int, total_files: int) -> None:
+            store.set_progress(job_id, done=done, total=total_files)
+            logger.info(
+                "worker dask progress",
+                extra={"job_id": job_id, "done": done, "total": total_files},
+            )
+
+        converter = DaskConverter(dask_config=dask_config())
+        res = converter.convert(
+            list(submission.input_files), cfg, on_progress=_on_progress
+        )
         output_uri = getattr(res, "output_uri", res)
         logger.info("worker conversion finished", extra={"job_id": job_id})
 
