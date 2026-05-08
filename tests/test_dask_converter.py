@@ -1,0 +1,251 @@
+"""Unit tests for the DaskConverter module."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from dataforge.core.dask_converter import DaskConverter, _generate_single_reference
+from dataforge.models.config import ConversionConfig, ConversionError, InvalidInputError
+from dataforge.models.dask_config import DaskConfig
+
+
+# ---------------------------------------------------------------------------
+# DaskConfig validation
+# ---------------------------------------------------------------------------
+
+
+def test_dask_config_defaults() -> None:
+    cfg = DaskConfig()
+    assert cfg.n_workers is None
+    assert cfg.threads_per_worker == 1
+    assert cfg.memory_limit == "2GiB"
+    assert cfg.processes is True
+    assert cfg.parallel_threshold == 4
+
+
+def test_dask_config_rejects_zero_threads() -> None:
+    with pytest.raises(ValueError, match="threads_per_worker must be >= 1"):
+        DaskConfig(threads_per_worker=0)
+
+
+def test_dask_config_rejects_zero_threshold() -> None:
+    with pytest.raises(ValueError, match="parallel_threshold must be >= 1"):
+        DaskConfig(parallel_threshold=0)
+
+
+# ---------------------------------------------------------------------------
+# Fallback to sequential converter below threshold
+# ---------------------------------------------------------------------------
+
+
+def test_below_threshold_delegates_to_sequential(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """With fewer inputs than parallel_threshold, DaskConverter uses sequential path."""
+    from dataforge.core.converter import KerchunkConverter
+
+    in_file = tmp_path / "a.nc"
+    in_file.write_bytes(b"dummy")
+    out_dir = tmp_path / "out"
+
+    cfg = ConversionConfig(output_prefix=str(out_dir), output_name="result")
+    dask_cfg = DaskConfig(parallel_threshold=5)
+
+    called = {}
+
+    def _fake_convert(self, inputs, config):
+        called["yes"] = True
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "result.json").write_text("{}", encoding="utf-8")
+        from dataforge.models.config import ConversionResult
+
+        return ConversionResult(
+            output_uri=str(out_dir / "result.json"), reference={}, inputs=inputs
+        )
+
+    monkeypatch.setattr(KerchunkConverter, "convert", _fake_convert)
+
+    converter = DaskConverter(dask_config=dask_cfg)
+    result = converter.convert([str(in_file)], cfg)
+
+    assert called.get("yes")
+    assert "result.json" in result.output_uri
+
+
+# ---------------------------------------------------------------------------
+# Parallel path (mocked Dask)
+# ---------------------------------------------------------------------------
+
+
+def test_above_threshold_uses_dask_parallel(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """With inputs >= parallel_threshold, DaskConverter uses the Dask path."""
+    # Create enough input files to exceed threshold.
+    dask_cfg = DaskConfig(parallel_threshold=2)
+    files = []
+    for i in range(3):
+        f = tmp_path / f"input_{i}.nc"
+        f.write_bytes(b"dummy")
+        files.append(str(f))
+
+    out_dir = tmp_path / "out"
+    out_dir.mkdir()
+    cfg = ConversionConfig(output_prefix=str(out_dir), output_name="combined")
+
+    fake_ref = {"version": 1, "refs": {".zmetadata": "{}"}}
+
+    # Mock _build_parallel to avoid needing a real Dask cluster.
+    def _fake_build_parallel(self, inputs, config, on_progress=None):
+        if on_progress:
+            for i in range(len(inputs)):
+                on_progress(i + 1, len(inputs))
+        return fake_ref
+
+    monkeypatch.setattr(DaskConverter, "_build_parallel", _fake_build_parallel)
+
+    converter = DaskConverter(dask_config=dask_cfg)
+    result = converter.convert(files, cfg)
+
+    assert result.reference == fake_ref
+    assert "combined.json" in result.output_uri
+    # Verify the file was written.
+    assert (out_dir / "combined.json").exists()
+
+
+def test_parallel_path_reports_progress(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """on_progress callback is invoked during parallel conversion."""
+    dask_cfg = DaskConfig(parallel_threshold=2)
+    files = []
+    for i in range(4):
+        f = tmp_path / f"input_{i}.nc"
+        f.write_bytes(b"dummy")
+        files.append(str(f))
+
+    out_dir = tmp_path / "out"
+    out_dir.mkdir()
+    cfg = ConversionConfig(output_prefix=str(out_dir), output_name="prog")
+
+    progress_calls: list[tuple[int, int]] = []
+
+    def _fake_build_parallel(self, inputs, config, on_progress=None):
+        if on_progress:
+            for i in range(len(inputs)):
+                on_progress(i + 1, len(inputs))
+        return {"version": 1, "refs": {}}
+
+    monkeypatch.setattr(DaskConverter, "_build_parallel", _fake_build_parallel)
+
+    converter = DaskConverter(dask_config=dask_cfg)
+    converter.convert(files, cfg, on_progress=lambda d, t: progress_calls.append((d, t)))
+
+    assert len(progress_calls) == 4
+    assert progress_calls[-1] == (4, 4)
+
+
+# ---------------------------------------------------------------------------
+# Error handling
+# ---------------------------------------------------------------------------
+
+
+def test_empty_inputs_raises_invalid_input_error() -> None:
+    converter = DaskConverter()
+    cfg = ConversionConfig(output_prefix="/tmp/out", output_name="x")
+    with pytest.raises(InvalidInputError, match="non-empty"):
+        converter.convert([], cfg)
+
+
+def test_parallel_path_wraps_exceptions_as_conversion_error(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Exceptions during parallel build are wrapped in ConversionError."""
+    dask_cfg = DaskConfig(parallel_threshold=2)
+    files = []
+    for i in range(3):
+        f = tmp_path / f"input_{i}.nc"
+        f.write_bytes(b"dummy")
+        files.append(str(f))
+
+    out_dir = tmp_path / "out"
+    out_dir.mkdir()
+    cfg = ConversionConfig(output_prefix=str(out_dir), output_name="fail")
+
+    def _boom(self, inputs, config, on_progress=None):
+        raise RuntimeError("cluster exploded")
+
+    monkeypatch.setattr(DaskConverter, "_build_parallel", _boom)
+
+    converter = DaskConverter(dask_config=dask_cfg)
+    with pytest.raises(ConversionError, match="cluster exploded"):
+        converter.convert(files, cfg)
+
+
+# ---------------------------------------------------------------------------
+# _generate_single_reference (the function sent to Dask workers)
+# ---------------------------------------------------------------------------
+
+
+def test_generate_single_reference_calls_kerchunk(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """_generate_single_reference delegates to SingleHdf5ToZarr."""
+    fake_ref = {"version": 1, "refs": {".zattrs": "{}"}}
+
+    mock_instance = MagicMock()
+    mock_instance.translate.return_value = fake_ref
+    mock_class = MagicMock(return_value=mock_instance)
+
+    monkeypatch.setattr("dataforge.core.dask_converter.SingleHdf5ToZarr", mock_class, raising=False)
+
+    # We need to patch it at the point of import inside the function.
+    with patch("kerchunk.hdf.SingleHdf5ToZarr", mock_class):
+        result = _generate_single_reference("/fake/path.nc", inline_threshold=200)
+
+    assert result == fake_ref
+    mock_class.assert_called_once_with("/fake/path.nc", inline_threshold=200)
+
+
+# ---------------------------------------------------------------------------
+# Settings integration
+# ---------------------------------------------------------------------------
+
+
+def test_settings_dask_config_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    """dask_config() returns sensible defaults from environment."""
+    monkeypatch.delenv("DATAFORGE_DASK_N_WORKERS", raising=False)
+    monkeypatch.delenv("DATAFORGE_DASK_THREADS_PER_WORKER", raising=False)
+    monkeypatch.delenv("DATAFORGE_DASK_MEMORY_LIMIT", raising=False)
+    monkeypatch.delenv("DATAFORGE_DASK_PROCESSES", raising=False)
+    monkeypatch.delenv("DATAFORGE_DASK_PARALLEL_THRESHOLD", raising=False)
+
+    from dataforge.settings import dask_config
+
+    cfg = dask_config()
+    assert cfg.n_workers is None
+    assert cfg.threads_per_worker == 1
+    assert cfg.memory_limit == "2GiB"
+    assert cfg.processes is True
+    assert cfg.parallel_threshold == 4
+
+
+def test_settings_dask_config_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """dask_config() reads from environment variables."""
+    monkeypatch.setenv("DATAFORGE_DASK_N_WORKERS", "8")
+    monkeypatch.setenv("DATAFORGE_DASK_THREADS_PER_WORKER", "2")
+    monkeypatch.setenv("DATAFORGE_DASK_MEMORY_LIMIT", "4GiB")
+    monkeypatch.setenv("DATAFORGE_DASK_PROCESSES", "false")
+    monkeypatch.setenv("DATAFORGE_DASK_PARALLEL_THRESHOLD", "10")
+
+    from dataforge.settings import dask_config
+
+    cfg = dask_config()
+    assert cfg.n_workers == 8
+    assert cfg.threads_per_worker == 2
+    assert cfg.memory_limit == "4GiB"
+    assert cfg.processes is False
+    assert cfg.parallel_threshold == 10
