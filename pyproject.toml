@@ -23,6 +23,8 @@ dependencies = [
     "redis>=5.0.0,<6.0.0",
     "httpx>=0.28.0,<0.29.0",
     "typer>=0.16.0,<0.17.0",
+    "dask>=2025.0,<2026.0",
+    "distributed>=2025.0,<2026.0",
 ]
 
 [project.scripts]
@@ -55,6 +57,10 @@ dramatiq = { version = "^1.17.0", extras = ["redis"] }
 redis = "^5.0.0"
 httpx = "^0.28.0"
 typer = "^0.16.0"
+
+# Stage 5
+dask = "^2025.0"
+distributed = "^2025.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0"
