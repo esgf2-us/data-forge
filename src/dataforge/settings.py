@@ -41,6 +41,12 @@ def s3_endpoint_url() -> str | None:
     return os.getenv("DATAFORGE_S3_ENDPOINT_URL")
 
 
+def cors_allowed_origins() -> list[str]:
+    value = os.getenv("DATAFORGE_CORS_ALLOWED_ORIGINS", "*")
+    origins = [origin.strip() for origin in value.split(",") if origin.strip()]
+    return origins or ["*"]
+
+
 def dask_config() -> DaskConfig:
     """Build DaskConfig from environment variables."""
     n_workers_raw = os.getenv("DATAFORGE_DASK_N_WORKERS")

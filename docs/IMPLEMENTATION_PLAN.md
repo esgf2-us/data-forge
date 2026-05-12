@@ -613,14 +613,22 @@ This document outlines a staged approach to building Data-Forge, a service for g
    - API latency benchmarks (target: p95 <500ms)
 
 3. **Security Audit**
-   - Authentication/authorization review
-   - Input validation and sanitization
-   - SQL/command injection prevention
-   - Credential handling audit (no leakage in logs/errors)
-   - Output path traversal attack prevention
-   - Rate limiting implementation
-   - Dependency vulnerability scanning
-   - Container security scanning
+    - Authentication/authorization review
+    - Input validation and sanitization
+    - SQL/command injection prevention
+    - Credential handling audit (no leakage in logs/errors)
+    - Output path traversal attack prevention
+    - Rate limiting implementation
+    - Dependency vulnerability scanning
+    - Container security scanning
+
+   **Current posture note (May 2026):**
+   - Current implementation is acceptable for trusted local development, but is not production-ready from a security standpoint.
+   - API endpoints are currently unauthenticated/unauthorized.
+   - Local input paths are accepted from callers without workspace confinement, so file access is broader than intended for a multi-user deployment.
+   - Local output placement can be derived from caller-supplied paths when no server-side local output root is configured.
+   - Development deployment currently exposes Redis and the API on the network without production-grade auth/TLS controls.
+   - OpenAPI/docs and permissive default CORS settings should be treated as development defaults and tightened before any shared deployment.
 
 4. **Kubernetes Production Testing**
    - Deploy to production-like environment
