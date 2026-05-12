@@ -172,3 +172,45 @@ def test_get_jobs_rejects_invalid_cursor(
     c, _store = client
     res = c.get("/api/v1/jobs", params={"cursor": "not-a-real-cursor"})
     assert res.status_code == 400
+
+
+def test_healthcheck_returns_ok_and_process_time_header(
+    client: tuple[TestClient, FakeJobStore],
+) -> None:
+    c, _store = client
+
+    res = c.get("/health")
+
+    assert res.status_code == 200
+    assert res.json() == {"status": "ok"}
+    assert "X-Process-Time" in res.headers
+
+
+def test_openapi_includes_jobs_and_health_paths(
+    client: tuple[TestClient, FakeJobStore],
+) -> None:
+    c, _store = client
+
+    res = c.get("/openapi.json")
+
+    assert res.status_code == 200
+    schema = res.json()
+    assert "/api/v1/jobs" in schema["paths"]
+    assert "/health" in schema["paths"]
+
+
+def test_cors_preflight_returns_expected_headers(
+    client: tuple[TestClient, FakeJobStore],
+) -> None:
+    c, _store = client
+
+    res = c.options(
+        "/api/v1/jobs",
+        headers={
+            "Origin": "https://example.com",
+            "Access-Control-Request-Method": "POST",
+        },
+    )
+
+    assert res.status_code == 200
+    assert res.headers["access-control-allow-origin"] == "*"

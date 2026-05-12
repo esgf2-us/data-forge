@@ -9,13 +9,13 @@ from fastapi.responses import JSONResponse
 
 from dataforge.api.deps import get_job_store
 from dataforge.job_store.base import JobStore
-from dataforge.models.job import (
+from dataforge.models.api import (
     Job,
     JobCreateRequest,
     JobListResponse,
     JobResultResponse,
-    JobStatus,
 )
+from dataforge.models.job import JobStatus
 from dataforge.settings import output_mode
 from dataforge.workers.converter_worker import convert_job
 
