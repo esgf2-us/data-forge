@@ -247,20 +247,26 @@ This document outlines a staged approach to building Data-Forge, a service for g
 ## Stage 4: STAC Catalog Integration (Week 6-7)
 
 ### Goals
-- Write Kerchunk reference files to local/S3 first, then append a new STAC asset pointing to that file
-- Support ESGF publish as a second-step STAC asset update job
+- Support a single publishing workflow: generate the Kerchunk reference, write it next to the source files or upload it via S3, then patch an existing STAC Item to add a `kerchunk` aggregate
+- Treat STAC patching as the final publication step after the Kerchunk href is known
 - **Security Model**: Single catalog configured server-side (prevents abuse)
 - Service authenticates to catalog; catalog is public read-only
 
 ### Tasks
 1. **STAC Module** (`src/dataforge/core/stac.py`)
-   - Implement STAC Item asset patching for an existing Item
-   - Add/replace a single asset (default key: kerchunk_reference) with the Kerchunk JSON href
-   - Require explicit target: stac_collection_id + stac_item_id
+   - Implement STAC Item aggregate patching for an existing Item
+   - Model the update after ESGF publisher aggregate-add behavior: fetch the existing Item, build JSON Patch operations, and apply only the aggregate asset change
+   - Add a `kerchunk` aggregate asset whose href points to the generated Kerchunk JSON
+   - Preserve existing Item content and unrelated assets; avoid replacing the full Item document
+   - Support future aggregate types with the same shape (`zarr`, `virtualizarr`, `icechunk`), but Stage 4 MVP only emits `kerchunk`
+   - Prefer dataset-oriented targeting: accept a dataset identifier, fetch the Item, and derive collection/item metadata from the fetched Item when possible
 
 2. **STAC API Client** (`src/dataforge/core/stac_client.py`)
-    - Create client for ESGF-NG STAC API
-    - Implement GET + PATCH/PUT for updating an existing Item's assets
+    - Use the `esgcet` package for ESGF-NG STAC search and transaction operations instead of building a custom low-level client from scratch
+    - Wrap `esgcet` behind a small local adapter so Data-Forge depends on a narrow internal interface
+    - Use `esgcet.search_check.ESGSearchCheck` or equivalent package search functionality to fetch the target Item before patching
+    - Use the `esgcet` transaction client support to submit JSON Patch operations for aggregate asset updates
+    - Fetch the target Item before patching so the service can validate existence and derive collection metadata
     - Handle service authentication (API token/credentials)
     - **Note**: Service authenticates to publish; catalog is public read-only for users
     - Error handling and retry logic (exponential backoff + jitter)
@@ -268,9 +274,12 @@ This document outlines a staged approach to building Data-Forge, a service for g
     - Fail fast on hard failures (400, 401/403, 404)
 
 3. **ESGF Publisher** (`src/dataforge/core/esgf_publisher.py`)
-    - Implement upload of the generated Kerchunk JSON
-    - Return a stable, externally-resolvable href for use in the STAC asset
-    - Server-configured endpoint and credentials (not per-job)
+    - Finalize the publishable Kerchunk href after generation
+    - Support the Stage 4 output cases:
+      - local write next to the source files
+      - S3 write to the configured bucket/prefix
+    - Return the externally-resolvable href that will be inserted into the STAC aggregate asset
+    - Reuse `esgcet` conventions and request shapes where practical so output publication and STAC update logic remain aligned with ESGF tooling
     - Error handling and retry logic (exponential backoff + jitter)
 
 4. **Publishing + STAC Configuration** (Server-Side Only)
@@ -280,25 +289,32 @@ This document outlines a staged approach to building Data-Forge, a service for g
    - **Rationale**: Prevents bad actors from publishing to arbitrary catalogs/endpoints
 
 5. **Worker Updates**
-    - If output_mode == esgf_publish:
-      - Upload the already-written Kerchunk JSON via ESGF publisher if needed
-      - Patch the target STAC Item to append a new asset that points to the Kerchunk file
-    - STAC update is required in esgf_publish mode: if it fails after retries, the job fails
-    - Record publication results (asset href, timestamps, failure reason)
+    - For Stage 4 publishing jobs:
+      - Generate the Kerchunk JSON
+      - Write it locally next to the source files or to S3 using the configured output mode
+      - Resolve the final href for that written Kerchunk JSON
+      - Fetch the target STAC Item and apply a JSON Patch that adds the `kerchunk` aggregate asset pointing to that href
+      - Include the publishing site/datanode context if required by the catalog's aggregate representation
+    - STAC patching is the final step in the publishing workflow; if it fails after retries, the job fails
+    - Record publication results (dataset ID, asset href, aggregate type, timestamps, failure reason)
 
 6. **API Endpoints**
-   - Enhance `POST /api/v1/jobs` with output mode selection
-   - Require `stac_collection_id` and `stac_item_id` when output_mode == esgf_publish
-   - `GET /api/v1/jobs/{job_id}/stac` - Retrieve STAC target + asset href (if published)
+    - Enhance `POST /api/v1/jobs` with output mode selection and publishing options
+    - Require a STAC target identifier when STAC publishing is requested
+    - Prefer `dataset_id` as the primary identifier for ESGF/STAC publish flows
+    - Allow `stac_collection_id` + `stac_item_id` only if the target catalog requires explicit addressing and dataset lookup is insufficient
+    - `GET /api/v1/jobs/{job_id}/stac` - Retrieve STAC target + asset href (if published)
 
 7. **Testing**
-   - Unit tests for STAC item asset patching
-   - Unit tests for ESGF publisher upload
-   - Integration tests with mock STAC API (including 429/5xx retry behavior)
-   - Integration tests for end-to-end: generate -> upload -> patch STAC
+    - Unit tests for STAC aggregate patch generation
+    - Unit tests for the local `esgcet` adapter layer with mocked `esgcet` responses
+    - Unit tests that verify only the aggregate asset change is emitted, leaving unrelated Item content untouched
+    - Unit tests for publishable href resolution for local and S3 outputs
+    - Integration tests for `esgcet`-backed STAC search + transaction flows (including 429/5xx retry behavior)
+    - Integration tests for end-to-end: generate -> write local/S3 -> fetch Item -> patch `kerchunk` aggregate into STAC Item
 
 ### Deliverables
-- ✅ STAC Item asset updates for existing Items
+- ✅ STAC aggregate asset updates for existing Items
 - ✅ Retries/backoff for upload + STAC update
 - ✅ Server-configured STAC catalog integration (secure)
 - ✅ Server-configured ESGF publish integration (secure)
@@ -583,12 +599,13 @@ This document outlines a staged approach to building Data-Forge, a service for g
 
 ---
 
-## Stage 9: Production Hardening & Final Testing (Week 15-16)
+## Stage 9: Production Hardening, Security, Resiliency & Final Testing (Week 15-16)
 
 ### Goals
 - Comprehensive end-to-end testing
 - Performance optimization and load testing
 - Security hardening
+- Queue and worker resiliency across service outages and restarts
 - Complete documentation
 - Production readiness verification
 
@@ -630,45 +647,55 @@ This document outlines a staged approach to building Data-Forge, a service for g
    - Development deployment currently exposes Redis and the API on the network without production-grade auth/TLS controls.
    - OpenAPI/docs and permissive default CORS settings should be treated as development defaults and tightened before any shared deployment.
 
-4. **Kubernetes Production Testing**
-   - Deploy to production-like environment
-   - Test horizontal scaling
-   - Test pod failure recovery
-   - Test rolling updates
-   - Ingress and load balancer testing
-   - Resource limit validation
-   - Monitoring and alerting verification
+4. **Queue Resiliency & Recovery**
+    - Verify queued jobs survive API restarts, worker restarts, and Redis reconnect events
+    - Define the expected behavior for jobs interrupted while `RUNNING`
+    - Implement recovery/reconciliation on startup so orphaned `RUNNING` jobs are re-queued or marked failed according to policy
+    - Ensure job state transitions remain safe under duplicate delivery or worker retry conditions
+    - Test cancellation behavior during outages and after recovery
+    - Document broker durability assumptions and required Redis persistence settings for production
+    - Add operational guidance for draining workers, restarting services, and recovering from broker outages
 
-5. **Documentation Completion**
-   - User guide for data publishers
-   - API documentation refinement (OpenAPI/Swagger)
-   - CLI reference with examples
-   - Deployment guide (Docker Compose + Kubernetes)
-   - Troubleshooting guide
-   - Architecture documentation
-   - Configuration reference
-   - Security best practices
-   - Performance tuning guidelines
+5. **Kubernetes Production Testing**
+    - Deploy to production-like environment
+    - Test horizontal scaling
+    - Test pod failure recovery
+    - Test rolling updates
+    - Ingress and load balancer testing
+    - Resource limit validation
+    - Monitoring and alerting verification
 
-6. **Production Readiness**
-   - Monitoring and alerting setup (Prometheus)
-   - Log aggregation configuration
-   - Backup and recovery procedures
-   - Incident response plan
-   - Runbook for common operations
-   - Health check validation
+6. **Documentation Completion**
+    - User guide for data publishers
+    - API documentation refinement (OpenAPI/Swagger)
+    - CLI reference with examples
+    - Deployment guide (Docker Compose + Kubernetes)
+    - Troubleshooting guide
+    - Architecture documentation
+    - Configuration reference
+    - Security best practices
+    - Resiliency and recovery runbooks
+    - Performance tuning guidelines
 
-7. **User Acceptance Testing**
-   - Beta testing with data publishers
-   - Feedback collection and priority fixes
-   - Usability improvements
-   - Edge case handling
-   - Documentation review
+7. **Production Readiness**
+    - Monitoring and alerting setup (Prometheus)
+    - Log aggregation configuration
+    - Backup and recovery procedures
+    - Incident response plan
+    - Runbook for common operations
+    - Health check validation
 
-8. **CMIP6/CMIP7 Validation**
-   - Test with real CMIP6 datasets from ESGF
-   - Various variables (tas, pr, tos, etc.)
-   - Different grid types and resolutions
+8. **User Acceptance Testing**
+    - Beta testing with data publishers
+    - Feedback collection and priority fixes
+    - Usability improvements
+    - Edge case handling
+    - Documentation review
+
+9. **CMIP6/CMIP7 Validation**
+    - Test with real CMIP6 datasets from ESGF
+    - Various variables (tas, pr, tos, etc.)
+    - Different grid types and resolutions
    - Historical, scenario, and control experiments
    - CMIP7 datasets (as available)
    - Validate STAC metadata accuracy
@@ -678,6 +705,7 @@ This document outlines a staged approach to building Data-Forge, a service for g
 - ✅ Comprehensive test coverage (>80%)
 - ✅ Complete documentation
 - ✅ Security audit passed
+- ✅ Queue resiliency and outage recovery validated
 - ✅ Performance benchmarks met
 - ✅ User acceptance criteria met
 - ✅ Kubernetes deployment validated
