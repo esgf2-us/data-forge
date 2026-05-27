@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from dataforge.models.job import Job, JobStatus, JobSubmission
+from dataforge.models.job import Job, JobPublication, JobStatus, JobSubmission
 
 
 def is_allowed_transition(old: JobStatus, new: JobStatus) -> bool:
@@ -52,5 +52,7 @@ class JobStore(Protocol):
     def set_result(self, job_id: str, result_url: str) -> Job: ...
 
     def set_error(self, job_id: str, error_message: str) -> Job: ...
+
+    def set_publication(self, job_id: str, publication: JobPublication) -> Job: ...
 
     def cancel(self, job_id: str) -> Job: ...

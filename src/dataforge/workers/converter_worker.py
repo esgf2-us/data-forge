@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
@@ -8,10 +9,12 @@ import dramatiq
 from dramatiq.brokers.redis import RedisBroker
 
 from dataforge.core.dask_converter import DaskConverter
+from dataforge.core.esgf_publisher import publishable_href
+from dataforge.core.stac_client import ESGPublisherStacClient
 from dataforge.job_store.base import JobStore
 from dataforge.job_store.redis import RedisJobStore
 from dataforge.models.config import ConversionConfig
-from dataforge.models.job import JobStatus, default_local_output_name
+from dataforge.models.job import JobPublication, JobStatus, default_local_output_name
 from dataforge.settings import dask_config, redis_broker_url, redis_jobstore_url
 
 
@@ -132,6 +135,37 @@ def run_job(store: JobStore, job_id: str) -> None:
 
         store.set_result(job_id, result_url)
         logger.info("worker job result stored", extra={"job_id": job_id})
+
+        if submission.publish_to_stac:
+            publish_href = publishable_href(
+                str(output_uri),
+                use_local_output_as_href=submission.use_local_output_as_href,
+            )
+            try:
+                publication = ESGPublisherStacClient().publish_kerchunk(
+                    dataset_id=submission.dataset_id or "",
+                    href=publish_href,
+                    datanode=submission.datanode,
+                )
+                store.set_publication(job_id, publication)
+                logger.info("worker job publication stored", extra={"job_id": job_id})
+            except Exception as e:
+                store.set_publication(
+                    job_id,
+                    JobPublication(
+                        dataset_id=submission.dataset_id or "",
+                        collection="",
+                        item_id=submission.dataset_id or "",
+                        aggregate_type="kerchunk",
+                        href=publish_href,
+                        datanode=submission.datanode or "",
+                        asset_path="/assets/reference_file",
+                        patch_applied=False,
+                        published_at=datetime.now(timezone.utc),
+                        error_message=str(e),
+                    ),
+                )
+                raise
 
         # Re-check once more before status terminal write.
         if store.get(job_id).status == JobStatus.CANCELLED:

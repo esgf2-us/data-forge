@@ -14,6 +14,7 @@ from dataforge.models.api import (
     JobCreateRequest,
     JobListResponse,
     JobResultResponse,
+    JobStacResponse,
 )
 from dataforge.models.job import JobStatus
 from dataforge.settings import output_mode
@@ -91,3 +92,20 @@ def cancel_job(
         return store.cancel(job_id)
     except KeyError as e:
         raise HTTPException(status_code=404, detail="job not found") from e
+
+
+@router.get("/jobs/{job_id}/stac", response_model=JobStacResponse)
+def get_job_stac(
+    job_id: str,
+    store: Annotated[JobStore, Depends(get_job_store)],
+) -> JobStacResponse:
+    try:
+        job = store.get(job_id)
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail="job not found") from e
+
+    return JobStacResponse(
+        job_id=job.id,
+        publish_to_stac=job.submission.publish_to_stac,
+        publication=job.publication,
+    )

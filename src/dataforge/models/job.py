@@ -79,6 +79,11 @@ class JobCreateRequest(BaseModel):
     identical_dims: list[str] | None = None
     inline_threshold: int = 300
     metadata: dict[str, Any] | None = None
+    publish_to_stac: bool = False
+    dataset_id: str | None = None
+    aggregate_type: Literal["kerchunk"] = "kerchunk"
+    datanode: str | None = None
+    use_local_output_as_href: bool = False
 
     @field_validator("output_name")
     @classmethod
@@ -111,6 +116,12 @@ class JobCreateRequest(BaseModel):
             raise ValueError("inline_threshold must be >= 0")
         return v
 
+    @model_validator(mode="after")
+    def _validate_publish_inputs(self) -> "JobCreateRequest":
+        if self.publish_to_stac and not self.dataset_id:
+            raise ValueError("dataset_id is required when publish_to_stac is true")
+        return self
+
     def to_submission(self, output_mode: Literal["local", "s3"]) -> "JobSubmission":
         return JobSubmission(output_mode=output_mode, **self.model_dump())
 
@@ -126,6 +137,11 @@ class JobSubmission(BaseModel):
     identical_dims: list[str] | None = None
     inline_threshold: int = 300
     metadata: dict[str, Any] | None = None
+    publish_to_stac: bool = False
+    dataset_id: str | None = None
+    aggregate_type: Literal["kerchunk"] = "kerchunk"
+    datanode: str | None = None
+    use_local_output_as_href: bool = False
 
     @field_validator("output_name")
     @classmethod
@@ -189,7 +205,24 @@ class JobSubmission(BaseModel):
             raise ValueError(
                 "output_path must be a local path when output_mode is local"
             )
+
+        if self.publish_to_stac and not self.dataset_id:
+            raise ValueError("dataset_id is required when publish_to_stac is true")
+
         return self
+
+
+class JobPublication(BaseModel):
+    dataset_id: str
+    collection: str
+    item_id: str
+    aggregate_type: Literal["kerchunk"]
+    href: str
+    datanode: str
+    asset_path: str
+    patch_applied: bool = False
+    published_at: datetime | None = None
+    error_message: str | None = None
 
 
 class Job(BaseModel):
@@ -207,6 +240,7 @@ class Job(BaseModel):
 
     error_message: str | None = None
     result_url: str | None = None
+    publication: JobPublication | None = None
 
 
 class JobListResponse(BaseModel):
@@ -216,3 +250,9 @@ class JobListResponse(BaseModel):
 
 class JobResultResponse(BaseModel):
     result_url: str
+
+
+class JobStacResponse(BaseModel):
+    job_id: str
+    publish_to_stac: bool
+    publication: JobPublication | None = None
