@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import json
+from pathlib import Path
 from typing import Literal
 
 from dataforge.models.dask_config import DaskConfig
@@ -39,6 +41,73 @@ def s3_output_path() -> str | None:
 
 def s3_endpoint_url() -> str | None:
     return os.getenv("DATAFORGE_S3_ENDPOINT_URL")
+
+
+def stac_api() -> str | None:
+    value = os.getenv("DATAFORGE_STAC_API")
+    if value is None:
+        return None
+    stripped = value.strip()
+    return stripped or None
+
+
+def stac_transaction_api() -> str | None:
+    value = os.getenv("DATAFORGE_STAC_TRANSACTION_API")
+    if value is None:
+        return stac_api()
+    stripped = value.strip()
+    return stripped or stac_api()
+
+
+def stac_datanode() -> str | None:
+    value = os.getenv("DATAFORGE_STAC_DATANODE")
+    if value is None:
+        return None
+    stripped = value.strip()
+    return stripped or None
+
+
+def stac_config_json() -> dict:
+    value = os.getenv("DATAFORGE_STAC_CONFIG_JSON")
+    if value is None:
+        return {}
+    stripped = value.strip()
+    if not stripped:
+        return {}
+    data = json.loads(stripped)
+    if not isinstance(data, dict):
+        raise ValueError("DATAFORGE_STAC_CONFIG_JSON must decode to an object")
+    return data
+
+
+def stac_href_mappings() -> list[tuple[str, str]]:
+    value = os.getenv("DATAFORGE_STAC_HREF_MAPPINGS")
+    if value is None:
+        return []
+    stripped = value.strip()
+    if not stripped:
+        return []
+
+    data = json.loads(stripped)
+    if not isinstance(data, list):
+        raise ValueError("DATAFORGE_STAC_HREF_MAPPINGS must decode to a list")
+
+    mappings: list[tuple[str, str]] = []
+    for item in data:
+        if not isinstance(item, dict):
+            raise ValueError("DATAFORGE_STAC_HREF_MAPPINGS entries must be objects")
+        local_prefix = item.get("local_prefix")
+        public_prefix = item.get("public_prefix")
+        if not isinstance(local_prefix, str) or not local_prefix.strip():
+            raise ValueError(
+                "DATAFORGE_STAC_HREF_MAPPINGS local_prefix must be non-empty"
+            )
+        if not isinstance(public_prefix, str) or not public_prefix.strip():
+            raise ValueError(
+                "DATAFORGE_STAC_HREF_MAPPINGS public_prefix must be non-empty"
+            )
+        mappings.append((str(Path(local_prefix).resolve()), public_prefix.rstrip("/")))
+    return mappings
 
 
 def cors_allowed_origins() -> list[str]:

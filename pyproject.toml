@@ -25,6 +25,7 @@ dependencies = [
     "typer>=0.16.0,<0.17.0",
     "dask>=2025.0,<2026.0",
     "distributed>=2025.0,<2026.0",
+    "esgcet @ git+https://github.com/ESGF/esg-publisher.git@esgf-ng-v5.4a",
 ]
 
 [project.scripts]
@@ -61,6 +62,7 @@ typer = "^0.16.0"
 # Stage 5
 dask = "^2025.0"
 distributed = "^2025.0"
+esgcet = { git = "https://github.com/ESGF/esg-publisher.git", rev = "esgf-ng-v5.4a" }
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0"
