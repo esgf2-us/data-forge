@@ -3,6 +3,19 @@
 ## Overview
 This document outlines a staged approach to building Data-Forge, a service for generating Kerchunk reference files and managing catalogs for climate datasets. **Key Architecture**: the initial core flow is local input -> generate Kerchunk -> write the reference file alongside the source data on local disk. Additional output destinations (for example S3 and Globus) are future stages. The service does NOT provide internal storage; users manage their own file storage infrastructure.
 
+## Current Status (May 2026)
+
+- ✅ Stage 0: Project setup and development tooling are in place
+- ✅ Stage 1: Core Kerchunk conversion and storage writers are implemented
+- ✅ Stage 2: Job queue, REST API, and local CLI smoke-test flow are implemented
+- ✅ Stage 3: Local workflow hardening is implemented end to end
+- ⏭️ Stage 4: STAC catalog integration is planned but not yet implemented
+- ✅ Stage 5: Dask-based parallel conversion is implemented, tested, and benchmark-ready
+- ⏭️ Stage 6: Advanced metadata, validation, and monitoring work has not started
+- ◐ Stage 7: Docker/Compose support is present; Kubernetes/Helm and the full CLI scope remain incomplete
+- ⏭️ Stage 8: Globus Auth integration has not started
+- ⏭️ Stage 9: Production hardening, security completion, and final readiness validation remain ahead
+
 ---
 
 ## Stage 0: Project Setup & Foundation (Week 1)
@@ -365,11 +378,12 @@ This document outlines a staged approach to building Data-Forge, a service for g
    - Efficient memory usage patterns
 
 6. **Performance Testing**
-   - Benchmark with/without Dask
-   - Test with datasets of various sizes (10, 100, 1000+ files)
-   - Measure speedup vs sequential processing
-   - Optimize worker count and chunk strategies
-   - Memory profiling
+    - Benchmark with/without Dask
+    - Test with datasets of various sizes (10, 100, 1000+ files)
+    - Measure speedup vs sequential processing
+    - Optimize worker count and chunk strategies
+    - Memory profiling
+    - Benchmark harness and usage documented in `docs/stage5-benchmark.md`
 
 ### Deliverables
 - ✅ Dask-based job-level parallelization
@@ -713,9 +727,11 @@ This document outlines a staged approach to building Data-Forge, a service for g
 
 ---
 
-## MVP COMPLETE (Week 16 / 4 Months)
+## MVP Target (Week 16 / 4 Months)
 
-### MVP Features Complete
+### Target MVP Feature Set
+The items below describe the intended end-state of the MVP, not the current implementation status.
+
 ✅ Kerchunk conversion service with Dask parallelization  
 ✅ REST API for job management  
 ✅ User-specified output paths (local filesystem)  
