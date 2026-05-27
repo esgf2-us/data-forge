@@ -56,6 +56,7 @@ def dask_config() -> DaskConfig:
     threads_per_worker = int(threads_raw)
 
     memory_limit = os.getenv("DATAFORGE_DASK_MEMORY_LIMIT", "2GiB")
+    local_directory = os.getenv("DATAFORGE_DASK_LOCAL_DIRECTORY")
 
     processes_raw = os.getenv("DATAFORGE_DASK_PROCESSES", "true").strip().lower()
     processes = processes_raw in ("true", "1", "yes")
@@ -67,6 +68,7 @@ def dask_config() -> DaskConfig:
         n_workers=n_workers,
         threads_per_worker=threads_per_worker,
         memory_limit=memory_limit,
+        local_directory=local_directory,
         processes=processes,
         parallel_threshold=parallel_threshold,
     )

@@ -13,7 +13,11 @@ from typing import Any, Generator
 
 from dask.distributed import Client, LocalCluster, as_completed
 
-from dataforge.core.converter import KerchunkConverter, _join_output, _normalize_local_input
+from dataforge.core.converter import (
+    KerchunkConverter,
+    _join_output,
+    _normalize_local_input,
+)
 from dataforge.core.storage import StorageWriter
 from dataforge.models.config import (
     ConversionConfig,
@@ -44,6 +48,7 @@ def _dask_cluster(config: DaskConfig) -> Generator[Client, None, None]:
         n_workers=config.n_workers,
         threads_per_worker=config.threads_per_worker,
         memory_limit=config.memory_limit,
+        local_directory=config.local_directory,
         processes=config.processes,
     )
     client = Client(cluster)
@@ -146,22 +151,23 @@ class DaskConverter:
             )
 
             with _dask_cluster(self._dask_config) as client:
-                futures = [
+                futures = {
                     client.submit(
                         _generate_single_reference,
                         path,
                         config.inline_threshold,
                         pure=False,
-                    )
-                    for path in inputs
-                ]
+                    ): i
+                    for i, path in enumerate(inputs)
+                }
 
-                # Gather results, reporting progress as each completes.
-                refs: list[dict[str, Any]] = []
-                for i, future in enumerate(as_completed(futures)):
-                    refs.append(future.result())
+                # Gather results as they complete, but preserve input order so
+                # concat_dims remain deterministic.
+                refs: list[dict[str, Any] | None] = [None] * total
+                for done, future in enumerate(as_completed(futures), start=1):
+                    refs[futures[future]] = future.result()
                     if on_progress is not None:
-                        on_progress(i + 1, total)
+                        on_progress(done, total)
 
             logger.info(
                 "parallel reference generation complete",
@@ -169,10 +175,17 @@ class DaskConverter:
             )
 
             if len(refs) == 1:
-                return refs[0]
+                ref = refs[0]
+                if ref is None:
+                    raise ConversionError("missing Dask reference result")
+                return ref
+
+            ordered_refs = [ref for ref in refs if ref is not None]
+            if len(ordered_refs) != total:
+                raise ConversionError("missing one or more Dask reference results")
 
             mzz = MultiZarrToZarr(
-                refs,
+                ordered_refs,
                 concat_dims=list(config.concat_dims),
                 identical_dims=list(config.identical_dims or []),
             )

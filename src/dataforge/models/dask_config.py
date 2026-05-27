@@ -18,6 +18,13 @@ class DaskConfig(BaseModel):
         default="2GiB",
         description="Memory limit per worker (e.g. '2GiB', '512MiB').",
     )
+    local_directory: str | None = Field(
+        default=None,
+        description=(
+            "Optional spill/work directory used by Dask workers for temporary "
+            "data when memory pressure is high."
+        ),
+    )
     processes: bool = Field(
         default=True,
         description="Use processes (True) or threads (False) for workers.",
@@ -43,3 +50,11 @@ class DaskConfig(BaseModel):
         if v < 1:
             raise ValueError("parallel_threshold must be >= 1")
         return v
+
+    @field_validator("local_directory")
+    @classmethod
+    def _validate_local_directory(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        stripped = v.strip()
+        return stripped or None
