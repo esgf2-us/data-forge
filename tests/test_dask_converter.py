@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -22,6 +23,7 @@ def test_dask_config_defaults() -> None:
     assert cfg.n_workers is None
     assert cfg.threads_per_worker == 1
     assert cfg.memory_limit == "2GiB"
+    assert cfg.local_directory is None
     assert cfg.processes is True
     assert cfg.parallel_threshold == 4
 
@@ -34,6 +36,11 @@ def test_dask_config_rejects_zero_threads() -> None:
 def test_dask_config_rejects_zero_threshold() -> None:
     with pytest.raises(ValueError, match="parallel_threshold must be >= 1"):
         DaskConfig(parallel_threshold=0)
+
+
+def test_dask_config_normalizes_blank_local_directory() -> None:
+    cfg = DaskConfig(local_directory="   ")
+    assert cfg.local_directory is None
 
 
 # ---------------------------------------------------------------------------
@@ -142,10 +149,77 @@ def test_parallel_path_reports_progress(
     monkeypatch.setattr(DaskConverter, "_build_parallel", _fake_build_parallel)
 
     converter = DaskConverter(dask_config=dask_cfg)
-    converter.convert(files, cfg, on_progress=lambda d, t: progress_calls.append((d, t)))
+    converter.convert(
+        files, cfg, on_progress=lambda d, t: progress_calls.append((d, t))
+    )
 
     assert len(progress_calls) == 4
     assert progress_calls[-1] == (4, 4)
+
+
+def test_parallel_path_preserves_input_order_when_tasks_finish_out_of_order(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    dask_cfg = DaskConfig(parallel_threshold=2)
+    files = []
+    for i in range(3):
+        f = tmp_path / f"input_{i}.nc"
+        f.write_bytes(b"dummy")
+        files.append(str(f))
+
+    out_dir = tmp_path / "out"
+    out_dir.mkdir()
+    cfg = ConversionConfig(
+        output_prefix=str(out_dir),
+        output_name="ordered",
+        concat_dims=["time"],
+    )
+
+    class FakeFuture:
+        def __init__(self, value: dict[str, object]) -> None:
+            self._value = value
+
+        def result(self) -> dict[str, object]:
+            return self._value
+
+    class FakeClient:
+        def __init__(self) -> None:
+            self.futures: list[FakeFuture] = []
+
+        def submit(self, fn, path, inline_threshold, pure=False):
+            future = FakeFuture({"path": path, "inline_threshold": inline_threshold})
+            self.futures.append(future)
+            return future
+
+    fake_client = FakeClient()
+
+    @contextmanager
+    def _fake_cluster(config):
+        yield fake_client
+
+    combine_calls: dict[str, object] = {}
+
+    class FakeMultiZarrToZarr:
+        def __init__(self, refs, concat_dims, identical_dims) -> None:
+            combine_calls["refs"] = refs
+            combine_calls["concat_dims"] = concat_dims
+            combine_calls["identical_dims"] = identical_dims
+
+        def translate(self) -> dict[str, object]:
+            return {"refs": combine_calls["refs"]}
+
+    def _reverse_completion_order(futures):
+        return list(reversed(list(futures)))
+
+    monkeypatch.setattr("dataforge.core.dask_converter._dask_cluster", _fake_cluster)
+    monkeypatch.setattr(
+        "dataforge.core.dask_converter.as_completed", _reverse_completion_order
+    )
+    with patch("kerchunk.combine.MultiZarrToZarr", FakeMultiZarrToZarr):
+        result = DaskConverter(dask_config=dask_cfg).convert(files, cfg)
+
+    assert [ref["path"] for ref in combine_calls["refs"]] == files
+    assert result.reference["refs"] == combine_calls["refs"]
 
 
 # ---------------------------------------------------------------------------
@@ -200,7 +274,9 @@ def test_generate_single_reference_calls_kerchunk(
     mock_instance.translate.return_value = fake_ref
     mock_class = MagicMock(return_value=mock_instance)
 
-    monkeypatch.setattr("dataforge.core.dask_converter.SingleHdf5ToZarr", mock_class, raising=False)
+    monkeypatch.setattr(
+        "dataforge.core.dask_converter.SingleHdf5ToZarr", mock_class, raising=False
+    )
 
     # We need to patch it at the point of import inside the function.
     with patch("kerchunk.hdf.SingleHdf5ToZarr", mock_class):
@@ -220,6 +296,7 @@ def test_settings_dask_config_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("DATAFORGE_DASK_N_WORKERS", raising=False)
     monkeypatch.delenv("DATAFORGE_DASK_THREADS_PER_WORKER", raising=False)
     monkeypatch.delenv("DATAFORGE_DASK_MEMORY_LIMIT", raising=False)
+    monkeypatch.delenv("DATAFORGE_DASK_LOCAL_DIRECTORY", raising=False)
     monkeypatch.delenv("DATAFORGE_DASK_PROCESSES", raising=False)
     monkeypatch.delenv("DATAFORGE_DASK_PARALLEL_THRESHOLD", raising=False)
 
@@ -229,6 +306,7 @@ def test_settings_dask_config_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert cfg.n_workers is None
     assert cfg.threads_per_worker == 1
     assert cfg.memory_limit == "2GiB"
+    assert cfg.local_directory is None
     assert cfg.processes is True
     assert cfg.parallel_threshold == 4
 
@@ -238,6 +316,7 @@ def test_settings_dask_config_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DATAFORGE_DASK_N_WORKERS", "8")
     monkeypatch.setenv("DATAFORGE_DASK_THREADS_PER_WORKER", "2")
     monkeypatch.setenv("DATAFORGE_DASK_MEMORY_LIMIT", "4GiB")
+    monkeypatch.setenv("DATAFORGE_DASK_LOCAL_DIRECTORY", " /tmp/dataforge-dask ")
     monkeypatch.setenv("DATAFORGE_DASK_PROCESSES", "false")
     monkeypatch.setenv("DATAFORGE_DASK_PARALLEL_THRESHOLD", "10")
 
@@ -247,5 +326,6 @@ def test_settings_dask_config_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     assert cfg.n_workers == 8
     assert cfg.threads_per_worker == 2
     assert cfg.memory_limit == "4GiB"
+    assert cfg.local_directory == "/tmp/dataforge-dask"
     assert cfg.processes is False
     assert cfg.parallel_threshold == 10
