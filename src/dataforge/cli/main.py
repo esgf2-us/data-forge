@@ -9,6 +9,8 @@ import typer
 from dataforge.client.api import DataForgeClient
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
+stac_app = typer.Typer(add_completion=False, no_args_is_help=True)
+app.add_typer(stac_app, name="stac")
 
 
 def _client() -> DataForgeClient:
@@ -56,6 +58,33 @@ def submit(
             help="Overwrite existing output files when present.",
         ),
     ] = False,
+    publish_to_stac: Annotated[
+        bool,
+        typer.Option(
+            "--publish-to-stac",
+            help="Publish the generated Kerchunk output to the configured STAC catalog.",
+        ),
+    ] = False,
+    dataset_id: Annotated[
+        str | None,
+        typer.Option(
+            "--dataset-id", help="Dataset identifier used to look up the STAC Item."
+        ),
+    ] = None,
+    datanode: Annotated[
+        str | None,
+        typer.Option(
+            "--datanode",
+            help="Optional datanode/site override for the published aggregate.",
+        ),
+    ] = None,
+    use_local_output_as_href: Annotated[
+        bool,
+        typer.Option(
+            "--use-local-output-as-href",
+            help="Publish the resolved local output path directly instead of applying STAC href prefix mapping.",
+        ),
+    ] = False,
     as_json: Annotated[
         bool, typer.Option("--json", help="Print the full API response as JSON.")
     ] = False,
@@ -76,6 +105,14 @@ def submit(
             raise typer.BadParameter("--metadata must be valid JSON") from e
     if overwrite_existing:
         payload["overwrite_existing"] = True
+    if publish_to_stac:
+        payload["publish_to_stac"] = True
+    if dataset_id is not None:
+        payload["dataset_id"] = dataset_id
+    if datanode is not None:
+        payload["datanode"] = datanode
+    if use_local_output_as_href:
+        payload["use_local_output_as_href"] = True
 
     job = _client().create_job(payload)
     if as_json:
@@ -172,3 +209,31 @@ def get_url(
         return
 
     typer.echo(payload["result_url"])
+
+
+@stac_app.command("show")
+def stac_show(
+    job_id: str,
+    as_json: Annotated[
+        bool, typer.Option("--json", help="Print the full API response as JSON.")
+    ] = False,
+) -> None:
+    payload = _client().get_job_stac(job_id)
+    if as_json:
+        _emit_json(payload)
+        return
+
+    typer.echo(f"Job ID: {payload['job_id']}")
+    typer.echo(f"Publish to STAC: {payload['publish_to_stac']}")
+    publication = payload.get("publication")
+    if not publication:
+        typer.echo("Publication: none")
+        return
+
+    typer.echo(f"Dataset ID: {publication['dataset_id']}")
+    typer.echo(f"Collection: {publication['collection']}")
+    typer.echo(f"Item ID: {publication['item_id']}")
+    typer.echo(f"Aggregate Type: {publication['aggregate_type']}")
+    typer.echo(f"Href: {publication['href']}")
+    typer.echo(f"Datanode: {publication['datanode']}")
+    typer.echo(f"Patch Applied: {publication['patch_applied']}")

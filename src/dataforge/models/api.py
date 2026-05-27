@@ -7,6 +7,7 @@ from dataforge.models.job import (
     JobCreateRequest as JobCreateRequestModel,
     JobListResponse as JobListResponseModel,
     JobResultResponse as JobResultResponseModel,
+    JobStacResponse as JobStacResponseModel,
 )
 
 
@@ -21,6 +22,9 @@ class JobCreateRequest(JobCreateRequestModel):
                     "concat_dims": ["time"],
                     "inline_threshold": 300,
                     "metadata": {"project": "CMIP6"},
+                    "publish_to_stac": True,
+                    "dataset_id": "CMIP6.CMIP.NCAR.CESM2.historical.Amon.tas.gn.v20190308",
+                    "use_local_output_as_href": False,
                 }
             ]
         },
@@ -43,6 +47,11 @@ class Job(JobModel):
                     "identical_dims": None,
                     "inline_threshold": 300,
                     "metadata": {"project": "CMIP6"},
+                    "publish_to_stac": True,
+                    "dataset_id": "CMIP6.CMIP.NCAR.CESM2.historical.Amon.tas.gn.v20190308",
+                    "aggregate_type": "kerchunk",
+                    "datanode": None,
+                    "use_local_output_as_href": False,
                 },
                 "created_at": "2026-05-12T00:00:00Z",
                 "updated_at": "2026-05-12T00:00:00Z",
@@ -52,6 +61,7 @@ class Job(JobModel):
                 "progress_done": None,
                 "error_message": None,
                 "result_url": None,
+                "publication": None,
             }
         }
     )
@@ -72,5 +82,28 @@ class JobResultResponse(JobResultResponseModel):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {"result_url": "file:///data/cmip6/tas_day_kerchunk.json"}
+        }
+    )
+
+
+class JobStacResponse(JobStacResponseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "job_id": "job-12345678-abcd-ef01-2345-6789abcdef01",
+                "publish_to_stac": True,
+                "publication": {
+                    "dataset_id": "CMIP6.CMIP.NCAR.CESM2.historical.Amon.tas.gn.v20190308",
+                    "collection": "CMIP6",
+                    "item_id": "CMIP6.CMIP.NCAR.CESM2.historical.Amon.tas.gn.v20190308",
+                    "aggregate_type": "kerchunk",
+                    "href": "/data/cmip6/tas_day_kerchunk.json",
+                    "datanode": "esgf-node.llnl.gov",
+                    "asset_path": "/assets/reference_file",
+                    "patch_applied": True,
+                    "published_at": "2026-05-12T00:05:00Z",
+                    "error_message": None,
+                },
+            }
         }
     )

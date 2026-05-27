@@ -38,6 +38,9 @@ class DataForgeClient:
     def get_job_result(self, job_id: str) -> dict[str, Any]:
         return self._request("GET", f"/api/v1/jobs/{job_id}/result")
 
+    def get_job_stac(self, job_id: str) -> dict[str, Any]:
+        return self._request("GET", f"/api/v1/jobs/{job_id}/stac")
+
     def cancel_job(self, job_id: str) -> dict[str, Any]:
         return self._request("DELETE", f"/api/v1/jobs/{job_id}")
 
