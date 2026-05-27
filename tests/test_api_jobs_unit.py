@@ -84,6 +84,47 @@ def test_post_can_enable_overwrite_existing(
     assert store.get(job_id).submission.overwrite_existing is True
 
 
+def test_post_can_enable_stac_publish(client: tuple[TestClient, FakeJobStore]) -> None:
+    c, store = client
+
+    res = c.post(
+        "/api/v1/jobs",
+        json={
+            "input_files": ["/tmp/input.nc"],
+            "publish_to_stac": True,
+            "dataset_id": "CMIP6.CMIP.NCAR.CESM2.historical.Amon.tas.gn.v20190308",
+        },
+    )
+
+    assert res.status_code == 201
+    job_id = res.json()["id"]
+    assert store.get(job_id).submission.publish_to_stac is True
+    assert (
+        store.get(job_id).submission.dataset_id
+        == "CMIP6.CMIP.NCAR.CESM2.historical.Amon.tas.gn.v20190308"
+    )
+
+
+def test_post_can_use_local_output_as_href(
+    client: tuple[TestClient, FakeJobStore],
+) -> None:
+    c, store = client
+
+    res = c.post(
+        "/api/v1/jobs",
+        json={
+            "input_files": ["/tmp/input.nc"],
+            "publish_to_stac": True,
+            "dataset_id": "CMIP6.CMIP.NCAR.CESM2.historical.Amon.tas.gn.v20190308",
+            "use_local_output_as_href": True,
+        },
+    )
+
+    assert res.status_code == 201
+    job_id = res.json()["id"]
+    assert store.get(job_id).submission.use_local_output_as_href is True
+
+
 def test_post_rejects_client_supplied_output_mode(
     client: tuple[TestClient, FakeJobStore], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -164,6 +205,49 @@ def test_get_result_after_completed_returns_result_url(
     res = c.get(f"/api/v1/jobs/{job_id}/result")
     assert res.status_code == 200
     assert res.json() == {"result_url": "file:///tmp/from-env/job.json"}
+
+
+def test_get_job_stac_returns_publication_state(
+    client: tuple[TestClient, FakeJobStore],
+) -> None:
+    from datetime import datetime, timezone
+
+    from dataforge.models.job import JobPublication
+
+    c, store = client
+
+    created = c.post(
+        "/api/v1/jobs",
+        json={
+            "input_files": ["/tmp/input.nc"],
+            "publish_to_stac": True,
+            "dataset_id": "CMIP6.CMIP.NCAR.CESM2.historical.Amon.tas.gn.v20190308",
+        },
+    )
+    job_id = created.json()["id"]
+
+    store.set_publication(
+        job_id,
+        JobPublication(
+            dataset_id="CMIP6.CMIP.NCAR.CESM2.historical.Amon.tas.gn.v20190308",
+            collection="CMIP6",
+            item_id="CMIP6.CMIP.NCAR.CESM2.historical.Amon.tas.gn.v20190308",
+            aggregate_type="kerchunk",
+            href="/tmp/from-env/job.json",
+            datanode="esgf-node.llnl.gov",
+            asset_path="/assets/reference_file",
+            patch_applied=True,
+            published_at=datetime.now(timezone.utc),
+        ),
+    )
+
+    res = c.get(f"/api/v1/jobs/{job_id}/stac")
+
+    assert res.status_code == 200
+    data = res.json()
+    assert data["job_id"] == job_id
+    assert data["publish_to_stac"] is True
+    assert data["publication"]["collection"] == "CMIP6"
 
 
 def test_get_jobs_rejects_invalid_cursor(

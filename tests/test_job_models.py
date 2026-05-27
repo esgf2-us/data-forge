@@ -13,6 +13,9 @@ def test_job_create_request_defaults() -> None:
     assert req.inline_threshold == 300
     assert req.metadata is None
     assert req.overwrite_existing is False
+    assert req.publish_to_stac is False
+    assert req.dataset_id is None
+    assert req.use_local_output_as_href is False
 
 
 def test_job_create_request_rejects_unsafe_output_name() -> None:
@@ -56,6 +59,28 @@ def test_job_submission_defaults() -> None:
     assert sub.inline_threshold == 300
     assert sub.metadata is None
     assert sub.overwrite_existing is False
+    assert sub.publish_to_stac is False
+    assert sub.dataset_id is None
+    assert sub.use_local_output_as_href is False
+
+
+def test_job_create_request_requires_dataset_id_when_publish_enabled() -> None:
+    from dataforge.models.job import JobCreateRequest
+
+    with pytest.raises(ValidationError, match="dataset_id is required"):
+        JobCreateRequest(input_files=["/tmp/a.nc"], publish_to_stac=True)
+
+
+def test_job_submission_requires_dataset_id_when_publish_enabled() -> None:
+    from dataforge.models.job import JobSubmission
+
+    with pytest.raises(ValidationError, match="dataset_id is required"):
+        JobSubmission(
+            input_files=["/tmp/a.nc"],
+            output_mode="local",
+            output_path="/tmp/out",
+            publish_to_stac=True,
+        )
 
 
 def test_job_submission_rejects_unsafe_output_name() -> None:
