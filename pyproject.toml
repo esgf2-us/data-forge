@@ -26,6 +26,7 @@ dependencies = [
     "dask>=2025.0,<2026.0",
     "distributed>=2025.0,<2026.0",
     "esgcet @ git+https://github.com/ESGF/esg-publisher.git@esgf-ng-v5.4a",
+    "prometheus-client>=0.24.0,<0.26.0",
 ]
 
 [project.scripts]
@@ -63,6 +64,7 @@ typer = "^0.16.0"
 dask = "^2025.0"
 distributed = "^2025.0"
 esgcet = { git = "https://github.com/ESGF/esg-publisher.git", rev = "esgf-ng-v5.4a" }
+prometheus-client = "^0.24.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0"

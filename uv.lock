@@ -253,9 +253,9 @@ name = "cf-units"
 version = "3.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cftime" },
-    { name = "jinja2" },
-    { name = "numpy" },
+    { name = "cftime", marker = "sys_platform != 'emscripten'" },
+    { name = "jinja2", marker = "sys_platform != 'emscripten'" },
+    { name = "numpy", marker = "sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/22/30/27509046e69457605e6eefa4ad7866fcdb6182b1a4f9b9d8404a28e3eb50/cf_units-3.3.1.tar.gz", hash = "sha256:84339f582994ae32ca5c472075c1e603a89f6c6f5a96cc1031bb5da700a14f3a", size = 311647, upload-time = "2026-01-16T15:09:38.423Z" }
 wheels = [
@@ -568,6 +568,7 @@ dependencies = [
     { name = "h5py" },
     { name = "httpx" },
     { name = "kerchunk" },
+    { name = "prometheus-client" },
     { name = "pydantic" },
     { name = "redis" },
     { name = "s3fs" },
@@ -595,6 +596,7 @@ requires-dist = [
     { name = "h5py", specifier = ">=3.12.0,<4.0.0" },
     { name = "httpx", specifier = ">=0.28.0,<0.29.0" },
     { name = "kerchunk", specifier = ">=0.2,<0.3" },
+    { name = "prometheus-client", specifier = ">=0.24.0,<0.26.0" },
     { name = "pydantic", specifier = ">=2.0,<3.0" },
     { name = "redis", specifier = ">=5.0.0,<6.0.0" },
     { name = "s3fs", specifier = ">=2025.0,<2026.0" },
@@ -2231,7 +2233,7 @@ name = "pyudunits2"
 version = "0.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "sympy", marker = "platform_machine != 'ARM64' or sys_platform != 'win32'" },
+    { name = "sympy", marker = "sys_platform == 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/3a/22/8c6c8762af2223672bc701d5e72b607a3be4d000f8776c59b72a13a08044/pyudunits2-0.1.tar.gz", hash = "sha256:791d234d402d8877e55a8baaad4a329c7537a187eda5bfc1b19d33150e0a170a", size = 190383, upload-time = "2025-02-07T08:32:22.462Z" }
 wheels = [
@@ -2649,7 +2651,7 @@ name = "sympy"
 version = "1.14.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "mpmath", marker = "platform_machine != 'ARM64' or sys_platform != 'win32'" },
+    { name = "mpmath", marker = "sys_platform == 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/83/d3/803453b36afefb7c2bb238361cd4ae6125a569b4db67cd9e79846ba2d68c/sympy-1.14.0.tar.gz", hash = "sha256:d3d3fe8df1e5a0b42f0e7bdf50541697dbe7d23746e894990c030e2b05e72517", size = 7793921, upload-time = "2025-04-27T18:05:01.611Z" }
 wheels = [
