@@ -17,6 +17,7 @@ from dataforge.models.api import (
     JobStacResponse,
 )
 from dataforge.models.job import JobStatus
+from dataforge.monitoring.metrics import JOBS_SUBMITTED
 from dataforge.settings import output_mode
 from dataforge.workers.converter_worker import convert_job
 
@@ -30,6 +31,7 @@ def create_job(
 ) -> Job:
     submission = request.to_submission(output_mode())
     job = store.create(submission)
+    JOBS_SUBMITTED.inc()
     convert_job.send(job.id)
     return job
 
