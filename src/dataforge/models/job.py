@@ -10,6 +10,7 @@ from urllib.parse import unquote, urlparse
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from dataforge.settings import local_output_path, s3_output_path
+from dataforge.core.validation import validate_dataset_id
 
 
 def _validate_output_name(value: str | None) -> str | None:
@@ -120,6 +121,8 @@ class JobCreateRequest(BaseModel):
     def _validate_publish_inputs(self) -> "JobCreateRequest":
         if self.publish_to_stac and not self.dataset_id:
             raise ValueError("dataset_id is required when publish_to_stac is true")
+        if self.dataset_id is not None:
+            self.dataset_id = validate_dataset_id(self.dataset_id)
         return self
 
     def to_submission(self, output_mode: Literal["local", "s3"]) -> "JobSubmission":
@@ -208,6 +211,8 @@ class JobSubmission(BaseModel):
 
         if self.publish_to_stac and not self.dataset_id:
             raise ValueError("dataset_id is required when publish_to_stac is true")
+        if self.dataset_id is not None:
+            self.dataset_id = validate_dataset_id(self.dataset_id)
 
         return self
 
@@ -223,6 +228,17 @@ class JobPublication(BaseModel):
     patch_applied: bool = False
     published_at: datetime | None = None
     error_message: str | None = None
+
+
+class JobResultMetadata(BaseModel):
+    dataset_id: str | None = None
+    project: str | None = None
+    source_files: list[str]
+    source_count: int
+    output_uri: str
+    generated_at: datetime
+    dataforge_version: str
+    user_metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class Job(BaseModel):
@@ -241,6 +257,7 @@ class Job(BaseModel):
     error_message: str | None = None
     result_url: str | None = None
     publication: JobPublication | None = None
+    result_metadata: JobResultMetadata | None = None
 
 
 class JobListResponse(BaseModel):

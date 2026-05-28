@@ -4,6 +4,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 from dataforge.core.storage import StorageWriter
+from dataforge.core.validation import preflight_validate
 from dataforge.models.config import (
     ConversionConfig,
     ConversionError,
@@ -51,6 +52,8 @@ class KerchunkConverter:
     def convert(self, inputs: list[str], config: ConversionConfig) -> ConversionResult:
         if not inputs:
             raise InvalidInputError("inputs must be non-empty")
+
+        preflight_validate(inputs, config)
 
         local_inputs = [_normalize_local_input(u) for u in inputs]
         output_uri = _join_output(config.output_prefix, config.output_name)
