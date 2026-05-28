@@ -266,8 +266,23 @@ def test_healthcheck_returns_ok_and_process_time_header(
     res = c.get("/health")
 
     assert res.status_code == 200
-    assert res.json() == {"status": "ok"}
+    data = res.json()
+    assert data["status"] == "ok"
+    assert data["output_mode"] == "local"
+    assert data["stac_configured"] is False
     assert "X-Process-Time" in res.headers
+
+
+def test_metrics_endpoint_exposes_prometheus_payload(
+    client: tuple[TestClient, FakeJobStore],
+) -> None:
+    c, _store = client
+
+    res = c.get("/metrics")
+
+    assert res.status_code == 200
+    assert "text/plain" in res.headers["content-type"]
+    assert "dataforge_api_request_latency_seconds" in res.text
 
 
 def test_openapi_includes_jobs_and_health_paths(
@@ -281,6 +296,7 @@ def test_openapi_includes_jobs_and_health_paths(
     schema = res.json()
     assert "/api/v1/jobs" in schema["paths"]
     assert "/health" in schema["paths"]
+    assert "/metrics" in schema["paths"]
 
 
 def test_cors_preflight_returns_expected_headers(

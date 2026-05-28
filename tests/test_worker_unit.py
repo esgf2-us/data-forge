@@ -52,6 +52,9 @@ def test_run_job_sets_running_progress_and_completes_with_file_result_url(
     assert got.progress_total == 2
     assert got.progress_done == 2
     assert got.result_url == expected_output.resolve().as_uri()
+    assert got.result_metadata is not None
+    assert got.result_metadata.source_count == 2
+    assert got.result_metadata.output_uri == str(expected_output)
     assert "worker job started" in caplog.text
     assert "worker job completed" in caplog.text
     assert "worker job result stored" in caplog.text
@@ -95,6 +98,8 @@ def test_run_job_uses_local_defaults_when_output_name_is_missing(
     got = store.get(job.id)
     assert got.status == JobStatus.COMPLETED
     assert got.result_url == expected_output.resolve().as_uri()
+    assert got.result_metadata is not None
+    assert got.result_metadata.dataset_id is None
 
 
 def test_run_job_forwards_overwrite_existing_flag(
@@ -385,6 +390,7 @@ def test_run_job_publish_failure_marks_job_failed_but_keeps_result(
     assert got.publication is not None
     assert got.publication.patch_applied is False
     assert got.publication.href == str(expected_output)
+    assert got.result_metadata is not None
     assert got.error_message is not None
     assert "patch failed" in got.error_message
 

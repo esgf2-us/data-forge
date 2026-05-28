@@ -71,6 +71,13 @@ def test_job_create_request_requires_dataset_id_when_publish_enabled() -> None:
         JobCreateRequest(input_files=["/tmp/a.nc"], publish_to_stac=True)
 
 
+def test_job_create_request_rejects_invalid_dataset_id() -> None:
+    from dataforge.models.job import JobCreateRequest
+
+    with pytest.raises(ValidationError, match="dataset_id"):
+        JobCreateRequest(input_files=["/tmp/a.nc"], dataset_id="bad id")
+
+
 def test_job_submission_requires_dataset_id_when_publish_enabled() -> None:
     from dataforge.models.job import JobSubmission
 
