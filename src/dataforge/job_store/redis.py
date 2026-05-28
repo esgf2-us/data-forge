@@ -8,7 +8,13 @@ from uuid import uuid4
 import redis
 
 from dataforge.job_store.base import JobStore
-from dataforge.models.job import Job, JobPublication, JobStatus, JobSubmission
+from dataforge.models.job import (
+    Job,
+    JobPublication,
+    JobResultMetadata,
+    JobStatus,
+    JobSubmission,
+)
 
 
 def _now() -> datetime:
@@ -162,6 +168,7 @@ class RedisJobStore(JobStore):
             error_message=None,
             result_url=None,
             publication=None,
+            result_metadata=None,
         )
 
         key = f"job:{job_id}"
@@ -299,6 +306,19 @@ class RedisJobStore(JobStore):
         )
         return self.get(job_id)
 
+    def set_result_metadata(self, job_id: str, metadata: JobResultMetadata) -> Job:
+        if self._r.exists(f"job:{job_id}") == 0:
+            raise KeyError(job_id)
+        now_ms = _ms(_now())
+        self._r.hset(
+            f"job:{job_id}",
+            mapping={
+                "result_metadata_json": metadata.model_dump_json(),
+                "updated_at_ms": str(now_ms),
+            },
+        )
+        return self.get(job_id)
+
     def set_error(self, job_id: str, error_message: str) -> Job:
         if self._r.exists(f"job:{job_id}") == 0:
             raise KeyError(job_id)
@@ -371,6 +391,7 @@ class RedisJobStore(JobStore):
         progress_total = data.get("progress_total")
         progress_done = data.get("progress_done")
         publication_json = data.get("publication_json")
+        result_metadata_json = data.get("result_metadata_json")
 
         return Job(
             id=data["id"],
@@ -387,6 +408,11 @@ class RedisJobStore(JobStore):
             publication=(
                 JobPublication.model_validate_json(publication_json)
                 if publication_json
+                else None
+            ),
+            result_metadata=(
+                JobResultMetadata.model_validate_json(result_metadata_json)
+                if result_metadata_json
                 else None
             ),
         )

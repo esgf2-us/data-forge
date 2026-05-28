@@ -19,6 +19,7 @@ from dataforge.core.converter import (
     _normalize_local_input,
 )
 from dataforge.core.storage import StorageWriter
+from dataforge.core.validation import preflight_validate
 from dataforge.models.config import (
     ConversionConfig,
     ConversionError,
@@ -111,6 +112,8 @@ class DaskConverter:
         """
         if not inputs:
             raise InvalidInputError("inputs must be non-empty")
+
+        preflight_validate(inputs, config)
 
         # Below parallel threshold, use sequential converter.
         if len(inputs) < self._dask_config.parallel_threshold:

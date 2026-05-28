@@ -62,6 +62,7 @@ class Job(JobModel):
                 "error_message": None,
                 "result_url": None,
                 "publication": None,
+                "result_metadata": None,
             }
         }
     )

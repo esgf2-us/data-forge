@@ -10,11 +10,18 @@ from dramatiq.brokers.redis import RedisBroker
 
 from dataforge.core.dask_converter import DaskConverter
 from dataforge.core.esgf_publisher import publishable_href
+from dataforge.core.metadata import build_result_metadata
 from dataforge.core.stac_client import ESGPublisherStacClient
 from dataforge.job_store.base import JobStore
 from dataforge.job_store.redis import RedisJobStore
 from dataforge.models.config import ConversionConfig
 from dataforge.models.job import JobPublication, JobStatus, default_local_output_name
+from dataforge.monitoring.metrics import (
+    FILES_PROCESSED_PER_SECOND,
+    JOBS_COMPLETED,
+    JOBS_FAILED,
+    JOB_DURATION_SECONDS,
+)
 from dataforge.settings import dask_config, redis_broker_url, redis_jobstore_url
 
 
@@ -135,6 +142,16 @@ def run_job(store: JobStore, job_id: str) -> None:
 
         store.set_result(job_id, result_url)
         logger.info("worker job result stored", extra={"job_id": job_id})
+        store.set_result_metadata(
+            job_id,
+            build_result_metadata(
+                inputs=list(submission.input_files),
+                output_uri=str(output_uri),
+                dataset_id=submission.dataset_id,
+                user_metadata=submission.metadata,
+            ),
+        )
+        logger.info("worker job metadata stored", extra={"job_id": job_id})
 
         if submission.publish_to_stac:
             publish_href = publishable_href(
@@ -175,6 +192,15 @@ def run_job(store: JobStore, job_id: str) -> None:
             store.set_status(
                 job_id, expected=JobStatus.RUNNING, new=JobStatus.COMPLETED
             )
+            completed = store.get(job_id)
+            if completed.started_at is not None and completed.completed_at is not None:
+                duration = (
+                    completed.completed_at - completed.started_at
+                ).total_seconds()
+                if duration > 0:
+                    JOB_DURATION_SECONDS.observe(duration)
+                    FILES_PROCESSED_PER_SECOND.observe(total / duration)
+            JOBS_COMPLETED.inc()
             logger.info("worker job completed", extra={"job_id": job_id})
         except ValueError as e:
             if "status mismatch" in str(e):
@@ -199,6 +225,7 @@ def run_job(store: JobStore, job_id: str) -> None:
                 store.set_status(
                     job_id, expected=JobStatus.RUNNING, new=JobStatus.FAILED
                 )
+                JOBS_FAILED.inc()
                 logger.info("worker job marked failed", extra={"job_id": job_id})
             except ValueError as e:
                 if "status mismatch" in str(e):

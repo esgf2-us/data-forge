@@ -4,7 +4,13 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from dataforge.job_store.base import is_allowed_transition
-from dataforge.models.job import Job, JobPublication, JobStatus, JobSubmission
+from dataforge.models.job import (
+    Job,
+    JobPublication,
+    JobResultMetadata,
+    JobStatus,
+    JobSubmission,
+)
 
 
 class FakeJobStore:
@@ -31,6 +37,7 @@ class FakeJobStore:
             error_message=None,
             result_url=None,
             publication=None,
+            result_metadata=None,
         )
         self._jobs[job_id] = job
         self._created_order.append(job_id)
@@ -104,6 +111,13 @@ class FakeJobStore:
         job = self._jobs[job_id]
         now = datetime.now(timezone.utc)
         job = job.model_copy(update={"result_url": result_url, "updated_at": now})
+        self._jobs[job_id] = job
+        return job
+
+    def set_result_metadata(self, job_id: str, metadata: JobResultMetadata) -> Job:
+        job = self._jobs[job_id]
+        now = datetime.now(timezone.utc)
+        job = job.model_copy(update={"result_metadata": metadata, "updated_at": now})
         self._jobs[job_id] = job
         return job
 
