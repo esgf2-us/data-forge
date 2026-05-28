@@ -78,3 +78,30 @@ def test_set_publication_persists_on_job() -> None:
     updated = store.set_publication(job.id, publication)
 
     assert updated.publication == publication
+
+
+def test_set_result_metadata_persists_on_job() -> None:
+    from datetime import datetime, timezone
+
+    from dataforge.job_store.fake import FakeJobStore
+    from dataforge.models.job import JobResultMetadata
+
+    store = FakeJobStore()
+    submission = JobSubmission(
+        input_files=["/tmp/input.nc"],
+        output_mode="local",
+        output_path="/tmp/out",
+    )
+    job = store.create(submission)
+
+    metadata = JobResultMetadata(
+        source_files=["/tmp/input.nc"],
+        source_count=1,
+        output_uri="/tmp/out/job.json",
+        generated_at=datetime.now(timezone.utc),
+        dataforge_version="0.1.0",
+    )
+
+    updated = store.set_result_metadata(job.id, metadata)
+
+    assert updated.result_metadata == metadata

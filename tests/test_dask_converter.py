@@ -74,6 +74,7 @@ def test_below_threshold_delegates_to_sequential(
         )
 
     monkeypatch.setattr(KerchunkConverter, "convert", _fake_convert)
+    monkeypatch.setattr("dataforge.core.dask_converter.preflight_validate", lambda inputs, config: None)
 
     converter = DaskConverter(dask_config=dask_cfg)
     result = converter.convert([str(in_file)], cfg)
@@ -113,6 +114,7 @@ def test_above_threshold_uses_dask_parallel(
         return fake_ref
 
     monkeypatch.setattr(DaskConverter, "_build_parallel", _fake_build_parallel)
+    monkeypatch.setattr("dataforge.core.dask_converter.preflight_validate", lambda inputs, config: None)
 
     converter = DaskConverter(dask_config=dask_cfg)
     result = converter.convert(files, cfg)
@@ -147,6 +149,7 @@ def test_parallel_path_reports_progress(
         return {"version": 1, "refs": {}}
 
     monkeypatch.setattr(DaskConverter, "_build_parallel", _fake_build_parallel)
+    monkeypatch.setattr("dataforge.core.dask_converter.preflight_validate", lambda inputs, config: None)
 
     converter = DaskConverter(dask_config=dask_cfg)
     converter.convert(
@@ -215,6 +218,7 @@ def test_parallel_path_preserves_input_order_when_tasks_finish_out_of_order(
     monkeypatch.setattr(
         "dataforge.core.dask_converter.as_completed", _reverse_completion_order
     )
+    monkeypatch.setattr("dataforge.core.dask_converter.preflight_validate", lambda inputs, config: None)
     with patch("kerchunk.combine.MultiZarrToZarr", FakeMultiZarrToZarr):
         result = DaskConverter(dask_config=dask_cfg).convert(files, cfg)
 
@@ -253,6 +257,7 @@ def test_parallel_path_wraps_exceptions_as_conversion_error(
         raise RuntimeError("cluster exploded")
 
     monkeypatch.setattr(DaskConverter, "_build_parallel", _boom)
+    monkeypatch.setattr("dataforge.core.dask_converter.preflight_validate", lambda inputs, config: None)
 
     converter = DaskConverter(dask_config=dask_cfg)
     with pytest.raises(ConversionError, match="cluster exploded"):
