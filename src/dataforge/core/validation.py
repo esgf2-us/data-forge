@@ -3,6 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
+from dataforge.core.input_paths import (
+    input_is_s3,
+    normalize_input_for_runtime,
+    validate_input_reference,
+)
 from dataforge.models.config import (
     ConversionConfig,
     InvalidConfigError,
@@ -29,40 +34,25 @@ def preflight_validate(inputs: list[str], config: ConversionConfig) -> None:
         raise InvalidInputError("inputs must be non-empty")
 
     for value in inputs:
-        path = _normalize_local_path(value)
+        validate_input_reference(value)
+        if input_is_s3(value):
+            continue
+        path = Path(normalize_input_for_runtime(value))
         if not path.exists():
             raise InvalidInputError(f"input file does not exist: {path}")
         if not path.is_file():
             raise InvalidInputError(f"input path is not a file: {path}")
-        _validate_hdf5_readable(path)
+        _validate_local_input_readable(path)
 
     _validate_output_prefix(config.output_prefix)
 
 
-def _normalize_local_path(value: str) -> Path:
-    if value.startswith("file://"):
-        parsed = urlparse(value)
-        if parsed.netloc not in ("", "localhost"):
-            raise InvalidInputError(f"unsupported file URI netloc: {parsed.netloc!r}")
-        path = Path(unquote(parsed.path))
-    else:
-        parsed = urlparse(value)
-        if parsed.scheme:
-            raise InvalidInputError(f"unsupported input scheme: {parsed.scheme!r}")
-        path = Path(value)
-    return path.expanduser().resolve()
-
-
-def _validate_hdf5_readable(path: Path) -> None:
+def _validate_local_input_readable(path: Path) -> None:
     try:
-        import h5py
-
-        with h5py.File(path, "r"):
+        with path.open("rb"):
             return
     except OSError as e:
-        raise InvalidInputError(
-            f"input file is not a readable HDF5/NetCDF file: {path}"
-        ) from e
+        raise InvalidInputError(f"input file is not readable: {path}") from e
 
 
 def _validate_output_prefix(prefix: str) -> None:

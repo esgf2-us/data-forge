@@ -7,6 +7,11 @@ from typing import Annotated, Any
 import typer
 
 from dataforge.client.api import DataForgeClient
+from dataforge.core.input_paths import (
+    input_is_local,
+    local_input_host_path,
+    validate_input_reference,
+)
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
 stac_app = typer.Typer(add_completion=False, no_args_is_help=True)
@@ -19,6 +24,21 @@ def _client() -> DataForgeClient:
 
 def _emit_json(payload: Any) -> None:
     typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+
+
+def _normalize_cli_inputs(input_files: list[str]) -> list[str]:
+    normalized: list[str] = []
+    for value in input_files:
+        try:
+            validate_input_reference(value)
+        except ValueError as e:
+            raise typer.BadParameter(str(e), param_hint="--input") from e
+
+        if input_is_local(value):
+            normalized.append(str(local_input_host_path(value)))
+        else:
+            normalized.append(value)
+    return normalized
 
 
 @app.command("submit")
@@ -90,7 +110,7 @@ def submit(
     ] = False,
 ) -> None:
     payload: dict[str, Any] = {
-        "input_files": input_files,
+        "input_files": _normalize_cli_inputs(input_files),
         "concat_dims": list(concat_dims),
         "inline_threshold": inline_threshold,
     }

@@ -109,6 +109,44 @@ def test_submit_prints_job_summary_and_sends_payload(
     }
 
 
+def test_submit_resolves_relative_local_inputs_before_submission(
+    monkeypatch: pytest.MonkeyPatch, runner: CliRunner, tmp_path
+) -> None:
+    stub = StubClient()
+    monkeypatch.setattr("dataforge.cli.main._client", lambda: stub)
+    monkeypatch.chdir(tmp_path)
+
+    nested = tmp_path / "data" / "samples"
+    nested.mkdir(parents=True)
+    in_file = nested / "a.nc"
+    in_file.write_text("x", encoding="utf-8")
+
+    result = runner.invoke(app, ["submit", "--input", "data/samples/a.nc"])
+
+    assert result.exit_code == 0
+    assert stub.created_payload == {
+        "input_files": [str(in_file.resolve())],
+        "concat_dims": ["time"],
+        "inline_threshold": 300,
+    }
+
+
+def test_submit_preserves_s3_inputs(
+    monkeypatch: pytest.MonkeyPatch, runner: CliRunner
+) -> None:
+    stub = StubClient()
+    monkeypatch.setattr("dataforge.cli.main._client", lambda: stub)
+
+    result = runner.invoke(app, ["submit", "--input", "s3://bucket/a.nc"])
+
+    assert result.exit_code == 0
+    assert stub.created_payload == {
+        "input_files": ["s3://bucket/a.nc"],
+        "concat_dims": ["time"],
+        "inline_threshold": 300,
+    }
+
+
 def test_submit_can_enable_stac_publish(
     monkeypatch: pytest.MonkeyPatch, runner: CliRunner
 ) -> None:
