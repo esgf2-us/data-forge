@@ -15,7 +15,7 @@ COPY src ./src
 
 RUN python -m venv /opt/venv \
     && /opt/venv/bin/pip install --no-cache-dir --upgrade pip setuptools wheel \
-    && /opt/venv/bin/pip install --no-cache-dir .
+    && /opt/venv/bin/pip install --no-cache-dir ".[server]"
 
 FROM python:3.14-slim AS runtime
 

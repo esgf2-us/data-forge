@@ -37,9 +37,18 @@ $ data-forge download <job-id> --output ./local_refs/
 
 ```bash
 uv venv
-uv sync --all-groups
+uv sync --all-groups --extra server
 uv run pytest -vvv
 ```
+
+For a lightweight CLI-only install, the base package is enough:
+
+```bash
+uv sync
+uv run data-forge --help
+```
+
+Install the `server` extra for the API, worker, conversion backends, STAC publish support, and monitoring stack.
 
 ## High-Level Architecture
 

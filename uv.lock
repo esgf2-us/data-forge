@@ -559,6 +559,13 @@ name = "data-forge"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "typer" },
+]
+
+[package.optional-dependencies]
+server = [
     { name = "dask" },
     { name = "distributed" },
     { name = "dramatiq", extra = ["redis"] },
@@ -566,14 +573,11 @@ dependencies = [
     { name = "fastapi" },
     { name = "fsspec" },
     { name = "h5py" },
-    { name = "httpx" },
     { name = "kerchunk" },
     { name = "prometheus-client" },
-    { name = "pydantic" },
     { name = "redis" },
     { name = "s3fs" },
     { name = "scipy" },
-    { name = "typer" },
     { name = "uvicorn" },
 ]
 
@@ -588,23 +592,24 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "dask", specifier = ">=2025.0,<2026.0" },
-    { name = "distributed", specifier = ">=2025.0,<2026.0" },
-    { name = "dramatiq", extras = ["redis"], specifier = ">=1.17.0,<2.0.0" },
-    { name = "esgcet", git = "https://github.com/ESGF/esg-publisher.git?rev=esgf-ng-v5.4a" },
-    { name = "fastapi", specifier = ">=0.115.0,<1.0.0" },
-    { name = "fsspec", specifier = ">=2025.0,<2026.0" },
-    { name = "h5py", specifier = ">=3.12.0,<4.0.0" },
+    { name = "dask", marker = "extra == 'server'", specifier = ">=2025.0,<2026.0" },
+    { name = "distributed", marker = "extra == 'server'", specifier = ">=2025.0,<2026.0" },
+    { name = "dramatiq", extras = ["redis"], marker = "extra == 'server'", specifier = ">=1.17.0,<2.0.0" },
+    { name = "esgcet", marker = "extra == 'server'", git = "https://github.com/ESGF/esg-publisher.git?rev=esgf-ng-v5.4a" },
+    { name = "fastapi", marker = "extra == 'server'", specifier = ">=0.115.0,<1.0.0" },
+    { name = "fsspec", marker = "extra == 'server'", specifier = ">=2025.0,<2026.0" },
+    { name = "h5py", marker = "extra == 'server'", specifier = ">=3.12.0,<4.0.0" },
     { name = "httpx", specifier = ">=0.28.0,<0.29.0" },
-    { name = "kerchunk", specifier = ">=0.2,<0.3" },
-    { name = "prometheus-client", specifier = ">=0.24.0,<0.26.0" },
+    { name = "kerchunk", marker = "extra == 'server'", specifier = ">=0.2,<0.3" },
+    { name = "prometheus-client", marker = "extra == 'server'", specifier = ">=0.24.0,<0.26.0" },
     { name = "pydantic", specifier = ">=2.0,<3.0" },
-    { name = "redis", specifier = ">=5.0.0,<6.0.0" },
-    { name = "s3fs", specifier = ">=2025.0,<2026.0" },
-    { name = "scipy", specifier = ">=1.16.0,<2.0.0" },
+    { name = "redis", marker = "extra == 'server'", specifier = ">=5.0.0,<6.0.0" },
+    { name = "s3fs", marker = "extra == 'server'", specifier = ">=2025.0,<2026.0" },
+    { name = "scipy", marker = "extra == 'server'", specifier = ">=1.16.0,<2.0.0" },
     { name = "typer", specifier = ">=0.16.0,<0.17.0" },
-    { name = "uvicorn", specifier = ">=0.34.0,<0.35.0" },
+    { name = "uvicorn", marker = "extra == 'server'", specifier = ">=0.34.0,<0.35.0" },
 ]
+provides-extras = ["server"]
 
 [package.metadata.requires-dev]
 dev = [
