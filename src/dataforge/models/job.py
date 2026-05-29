@@ -9,6 +9,11 @@ from urllib.parse import unquote, urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from dataforge.core.input_paths import (
+    input_is_local,
+    input_name_stem,
+    validate_input_reference,
+)
 from dataforge.settings import local_output_path, s3_output_path
 from dataforge.core.validation import validate_dataset_id
 
@@ -35,11 +40,11 @@ def default_local_output_directory(input_files: list[str]) -> str:
     return os.path.commonpath([str(parent) for parent in parents])
 
 
-def default_local_output_name(input_files: list[str]) -> str:
+def default_output_name(input_files: list[str]) -> str:
     if not input_files:
         raise ValueError("input_files must be non-empty")
 
-    stems = [_local_path_from_input(value).stem or "reference" for value in input_files]
+    stems = [input_name_stem(value) for value in input_files]
     if len(stems) == 1:
         return stems[0]
 
@@ -48,15 +53,15 @@ def default_local_output_name(input_files: list[str]) -> str:
 
 
 def _local_path_from_input(value: str) -> Path:
+    validate_input_reference(value)
+    if not input_is_local(value):
+        raise ValueError(
+            "input_files must reference local paths to infer local output paths"
+        )
     if value.startswith("file://"):
         parsed = urlparse(value)
-        if parsed.netloc not in ("", "localhost"):
-            raise ValueError("input_files must reference local paths")
         path = Path(unquote(parsed.path))
     else:
-        parsed = urlparse(value)
-        if parsed.scheme:
-            raise ValueError("input_files must reference local paths")
         path = Path(value)
     return path.expanduser().resolve()
 
@@ -93,21 +98,11 @@ class JobCreateRequest(BaseModel):
 
     @field_validator("input_files")
     @classmethod
-    def _validate_inputs_are_local(cls, v: list[str]) -> list[str]:
+    def _validate_inputs(cls, v: list[str]) -> list[str]:
         if not v:
             raise ValueError("input_files must be non-empty")
         for item in v:
-            if not item:
-                raise ValueError("input_files must reference local paths")
-            p = urlparse(item)
-            if p.scheme and p.scheme != "file":
-                raise ValueError("input_files must reference local paths")
-            if not p.scheme and p.netloc:
-                raise ValueError("input_files must reference local paths")
-            if p.scheme == "file" and p.netloc not in ("", "localhost"):
-                raise ValueError("input_files must reference local paths")
-            if p.scheme == "file" and not p.path:
-                raise ValueError("input_files must reference local paths")
+            validate_input_reference(item)
         return v
 
     @field_validator("inline_threshold")
@@ -153,21 +148,11 @@ class JobSubmission(BaseModel):
 
     @field_validator("input_files")
     @classmethod
-    def _validate_inputs_are_local(cls, v: list[str]) -> list[str]:
+    def _validate_inputs(cls, v: list[str]) -> list[str]:
         if not v:
             raise ValueError("input_files must be non-empty")
         for item in v:
-            if not item:
-                raise ValueError("input_files must reference local paths")
-            p = urlparse(item)
-            if p.scheme and p.scheme != "file":
-                raise ValueError("input_files must reference local paths")
-            if not p.scheme and p.netloc:
-                raise ValueError("input_files must reference local paths")
-            if p.scheme == "file" and p.netloc not in ("", "localhost"):
-                raise ValueError("input_files must reference local paths")
-            if p.scheme == "file" and not p.path:
-                raise ValueError("input_files must reference local paths")
+            validate_input_reference(item)
         return v
 
     @field_validator("inline_threshold")
@@ -189,6 +174,10 @@ class JobSubmission(BaseModel):
         if self.output_mode == "local" and output_path is None:
             output_path = local_output_path()
             if output_path is None:
+                if not all(input_is_local(value) for value in self.input_files):
+                    raise ValueError(
+                        "output_path must be provided for local mode when inputs include s3 URLs"
+                    )
                 output_path = default_local_output_directory(self.input_files)
         if self.output_mode == "s3" and output_path is None:
             output_path = s3_output_path()

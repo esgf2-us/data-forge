@@ -15,7 +15,7 @@ from dataforge.core.stac_client import ESGPublisherStacClient
 from dataforge.job_store.base import JobStore
 from dataforge.job_store.redis import RedisJobStore
 from dataforge.models.config import ConversionConfig
-from dataforge.models.job import JobPublication, JobStatus, default_local_output_name
+from dataforge.models.job import JobPublication, JobStatus, default_output_name
 from dataforge.monitoring.metrics import (
     FILES_PROCESSED_PER_SECOND,
     JOBS_COMPLETED,
@@ -91,7 +91,7 @@ def run_job(store: JobStore, job_id: str) -> None:
         submission = store.get(job_id).submission
         output_name = submission.output_name
         if output_name is None and submission.output_mode == "local":
-            output_name = default_local_output_name(submission.input_files)
+            output_name = default_output_name(submission.input_files)
         if output_name is None:
             output_name = job_id
 

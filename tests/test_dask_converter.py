@@ -160,6 +160,27 @@ def test_parallel_path_reports_progress(
     assert progress_calls[-1] == (4, 4)
 
 
+def test_generate_single_reference_uses_shared_single_file_router(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from dataforge.core.dask_converter import _generate_single_reference
+
+    calls: list[tuple[str, int]] = []
+
+    def _fake_single_file_reference(path: str, inline_threshold: int) -> dict[str, object]:
+        calls.append((path, inline_threshold))
+        return {"path": path}
+
+    monkeypatch.setattr(
+        "dataforge.core.dask_converter._single_file_reference", _fake_single_file_reference
+    )
+
+    result = _generate_single_reference("/tmp/a.nc", 321)
+
+    assert calls == [("/tmp/a.nc", 321)]
+    assert result == {"path": "/tmp/a.nc"}
+
+
 def test_parallel_path_preserves_input_order_when_tasks_finish_out_of_order(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -272,23 +293,16 @@ def test_parallel_path_wraps_exceptions_as_conversion_error(
 def test_generate_single_reference_calls_kerchunk(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """_generate_single_reference delegates to SingleHdf5ToZarr."""
+    """_generate_single_reference delegates to the shared single-file router."""
     fake_ref = {"version": 1, "refs": {".zattrs": "{}"}}
 
-    mock_instance = MagicMock()
-    mock_instance.translate.return_value = fake_ref
-    mock_class = MagicMock(return_value=mock_instance)
+    mock_router = MagicMock(return_value=fake_ref)
+    monkeypatch.setattr("dataforge.core.dask_converter._single_file_reference", mock_router)
 
-    monkeypatch.setattr(
-        "dataforge.core.dask_converter.SingleHdf5ToZarr", mock_class, raising=False
-    )
-
-    # We need to patch it at the point of import inside the function.
-    with patch("kerchunk.hdf.SingleHdf5ToZarr", mock_class):
-        result = _generate_single_reference("/fake/path.nc", inline_threshold=200)
+    result = _generate_single_reference("/fake/path.nc", inline_threshold=200)
 
     assert result == fake_ref
-    mock_class.assert_called_once_with("/fake/path.nc", inline_threshold=200)
+    mock_router.assert_called_once_with("/fake/path.nc", inline_threshold=200)
 
 
 # ---------------------------------------------------------------------------
