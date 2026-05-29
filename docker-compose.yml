@@ -1,41 +1,76 @@
+x-dataforge-common: &dataforge-common
+  build:
+    context: .
+    target: runtime
+  restart: unless-stopped
+  environment: &dataforge-env
+    DATAFORGE_BROKER_REDIS_URL: ${DATAFORGE_BROKER_REDIS_URL:-redis://redis:6379/0}
+    DATAFORGE_REDIS_URL: ${DATAFORGE_REDIS_URL:-redis://redis:6379/1}
+    DATAFORGE_OUTPUT_MODE: ${DATAFORGE_OUTPUT_MODE:-local}
+    DATAFORGE_CORS_ALLOWED_ORIGINS: ${DATAFORGE_CORS_ALLOWED_ORIGINS:-*}
+    DATAFORGE_LOCAL_OUTPUT_PATH: ${DATAFORGE_LOCAL_OUTPUT_PATH:-/inputs/repo-data/kerchunks}
+    DATAFORGE_S3_OUTPUT_PATH: ${DATAFORGE_S3_OUTPUT_PATH:-s3://dataforge-kerchunks/kerchunks}
+    DATAFORGE_S3_ENDPOINT_URL: ${DATAFORGE_S3_ENDPOINT_URL:-}
+    DATAFORGE_STAC_API: ${DATAFORGE_STAC_API:-}
+    DATAFORGE_STAC_TRANSACTION_API: ${DATAFORGE_STAC_TRANSACTION_API:-}
+    DATAFORGE_STAC_DATANODE: ${DATAFORGE_STAC_DATANODE:-}
+    DATAFORGE_STAC_CONFIG_JSON: ${DATAFORGE_STAC_CONFIG_JSON:-}
+    DATAFORGE_STAC_HREF_MAPPINGS: ${DATAFORGE_STAC_HREF_MAPPINGS:-}
+    DATAFORGE_LOCAL_INPUT_MAPPINGS: ${DATAFORGE_LOCAL_INPUT_MAPPINGS:-[]}
+    DATAFORGE_DASK_N_WORKERS: ${DATAFORGE_DASK_N_WORKERS:-}
+    DATAFORGE_DASK_THREADS_PER_WORKER: ${DATAFORGE_DASK_THREADS_PER_WORKER:-1}
+    DATAFORGE_DASK_MEMORY_LIMIT: ${DATAFORGE_DASK_MEMORY_LIMIT:-2GiB}
+    DATAFORGE_DASK_LOCAL_DIRECTORY: ${DATAFORGE_DASK_LOCAL_DIRECTORY:-}
+    DATAFORGE_DASK_PROCESSES: ${DATAFORGE_DASK_PROCESSES:-true}
+    DATAFORGE_DASK_PARALLEL_THRESHOLD: ${DATAFORGE_DASK_PARALLEL_THRESHOLD:-4}
+  volumes:
+    - ./data:/inputs/repo-data
+
 services:
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   api:
-    build: .
+    <<: *dataforge-common
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     ports:
       - "8000:8000"
-    environment:
-      DATAFORGE_BROKER_REDIS_URL: redis://redis:6379/0
-      DATAFORGE_OUTPUT_MODE: local
-      DATAFORGE_REDIS_URL: redis://redis:6379/1
-      DATAFORGE_WORKSPACE: ${DATAFORGE_WORKSPACE:?set DATAFORGE_WORKSPACE}
-    volumes:
-      - ${DATAFORGE_WORKSPACE:?set DATAFORGE_WORKSPACE}:${DATAFORGE_WORKSPACE:?set DATAFORGE_WORKSPACE}
-      - ./data:/data
-    command: uvicorn dataforge.api.app:create_app --factory --host 0.0.0.0 --port 8000
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5).read()",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
 
   worker:
-    build: .
+    <<: *dataforge-common
     depends_on:
-      - redis
-    environment:
-      DATAFORGE_BROKER_REDIS_URL: redis://redis:6379/0
-      DATAFORGE_OUTPUT_MODE: local
-      DATAFORGE_REDIS_URL: redis://redis:6379/1
-      DATAFORGE_WORKSPACE: ${DATAFORGE_WORKSPACE:?set DATAFORGE_WORKSPACE}
-      # Dask parallelization settings
-      DATAFORGE_DASK_N_WORKERS: ${DATAFORGE_DASK_N_WORKERS:-}
-      DATAFORGE_DASK_THREADS_PER_WORKER: ${DATAFORGE_DASK_THREADS_PER_WORKER:-1}
-      DATAFORGE_DASK_MEMORY_LIMIT: ${DATAFORGE_DASK_MEMORY_LIMIT:-2GiB}
-      DATAFORGE_DASK_PROCESSES: ${DATAFORGE_DASK_PROCESSES:-true}
-      DATAFORGE_DASK_PARALLEL_THRESHOLD: ${DATAFORGE_DASK_PARALLEL_THRESHOLD:-4}
-    volumes:
-      - ${DATAFORGE_WORKSPACE:?set DATAFORGE_WORKSPACE}:${DATAFORGE_WORKSPACE:?set DATAFORGE_WORKSPACE}
-      - ./data:/data
-    command: dramatiq dataforge.workers.converter_worker
+      redis:
+        condition: service_healthy
+    command: ["dramatiq", "dataforge.workers.converter_worker"]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import os, redis; redis.Redis.from_url(os.environ['DATAFORGE_BROKER_REDIS_URL']).ping()",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10

@@ -59,9 +59,20 @@ uv run pytest -vvv
 ## Deployment
 
 - Docker Compose for local/single-node deployment
-- Local output overlay: `docker compose -f docker-compose.yml -f docker-compose.local.yml up`
+- Copy `.env.example` to `.env` and set `DATAFORGE_LOCAL_INPUT_MAPPINGS` to map host local input prefixes onto mounted container prefixes
+- Base stack: `docker compose up --build`
+- Local output overlay: `docker compose -f docker-compose.yml -f docker-compose.local.yml up --build`
+- S3 output overlay: `docker compose -f docker-compose.yml -f docker-compose.s3.yml up --build`
 - Helm chart for Kubernetes (production, scalable)
 - Minimal required services: API, worker(s), Redis
+
+For the default repo-local sample data mount, configure:
+
+```bash
+DATAFORGE_LOCAL_INPUT_MAPPINGS=[{"host_prefix":"/home/user/data-forge/data","container_prefix":"/inputs/repo-data"}]
+```
+
+If you mount additional local input directories into the API and worker containers, add more mapping entries. Local job submissions are rewritten by longest matching `host_prefix`, while `s3://` inputs pass through unchanged.
 
 ## Documentation
 
