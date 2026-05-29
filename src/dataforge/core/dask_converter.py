@@ -16,7 +16,8 @@ from dask.distributed import Client, LocalCluster, as_completed
 from dataforge.core.converter import (
     KerchunkConverter,
     _join_output,
-    _normalize_local_input,
+    _normalize_input,
+    _single_file_reference,
 )
 from dataforge.core.storage import StorageWriter
 from dataforge.core.validation import preflight_validate
@@ -37,9 +38,7 @@ def _generate_single_reference(path: str, inline_threshold: int) -> dict[str, An
     This function is submitted to Dask workers and must be self-contained
     (imports inside to ensure serializability).
     """
-    from kerchunk.hdf import SingleHdf5ToZarr
-
-    return SingleHdf5ToZarr(path, inline_threshold=inline_threshold).translate()
+    return _single_file_reference(path, inline_threshold=inline_threshold)
 
 
 @contextmanager
@@ -119,11 +118,11 @@ class DaskConverter:
         if len(inputs) < self._dask_config.parallel_threshold:
             return self._sequential.convert(inputs, config)
 
-        local_inputs = [_normalize_local_input(u) for u in inputs]
+        resolved_inputs = [_normalize_input(u) for u in inputs]
         output_uri = _join_output(config.output_prefix, config.output_name)
 
         try:
-            reference = self._build_parallel(local_inputs, config, on_progress)
+            reference = self._build_parallel(resolved_inputs, config, on_progress)
         except (InvalidInputError, ConversionError):
             raise
         except Exception as e:
@@ -134,7 +133,7 @@ class DaskConverter:
         )
 
         return ConversionResult(
-            output_uri=output_uri, reference=reference, inputs=local_inputs
+            output_uri=output_uri, reference=reference, inputs=resolved_inputs
         )
 
     def _build_parallel(
