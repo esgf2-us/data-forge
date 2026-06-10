@@ -70,8 +70,8 @@ Install the `server` extra for the API, worker, conversion backends, STAC publis
 - Docker Compose for local/single-node deployment
 - Copy `.env.example` to `.env` and set `DATAFORGE_LOCAL_INPUT_MAPPINGS` to map host local input prefixes onto mounted container prefixes
 - Base stack: `docker compose up --build`
-- Local output overlay: `docker compose -f docker-compose.yml -f docker-compose.local.yml up --build`
-- S3 output overlay: `docker compose -f docker-compose.yml -f docker-compose.s3.yml up --build`
+- Local output overlay: `docker compose -f compose.yaml -f compose.local.yaml up --build`
+- S3 output overlay: `docker compose -f compose.yaml -f compose.s3.yaml up --build`
 - Helm chart for Kubernetes (production, scalable)
 - Minimal required services: API, worker(s), Redis
 - Release/versioning workflow: [`docs/release-versioning.md`](docs/release-versioning.md)

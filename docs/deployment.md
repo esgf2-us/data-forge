@@ -13,13 +13,13 @@ docker compose up --build
 Local output overlay:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.local.yml up --build
+docker compose -f compose.yaml -f compose.local.yaml up --build
 ```
 
 S3 output overlay:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.s3.yml up --build
+docker compose -f compose.yaml -f compose.s3.yaml up --build
 ```
 
 The base stack runs:

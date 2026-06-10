@@ -91,7 +91,7 @@ This document outlines a staged approach to building Data-Forge, a service for g
     - Support writing to S3 (s3://)
     - Support writing to local filesystem
     - Handle authentication for output destinations
-    - Add a docker-compose overlay for local S3-compatible testing and output validation
+     - Add a Compose overlay for local S3-compatible testing and output validation
 
 3. **Configuration** (`src/dataforge/models/config.py`)
      - Define conversion configuration model:
@@ -476,7 +476,7 @@ This document outlines a staged approach to building Data-Forge, a service for g
    - Pin dependencies for reproducibility
    - Security scanning integration
 
-2. **Docker Compose** (`docker-compose.yml`)
+2. **Docker Compose** (`compose.yaml`)
    - API service (FastAPI)
    - Worker service(s) (dramatiq)
    - Redis service (job metadata)
