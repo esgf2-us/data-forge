@@ -33,3 +33,12 @@ This updates:
 - Code changes that ship a new app version should bump both the package and chart versions.
 - Chart-only changes should bump the chart version.
 - Avoid `latest` for deployable chart images.
+
+## GitHub Actions
+
+- Pull requests build and push a preview image tagged `pr-<number>` to GHCR.
+- Git tags matching `v*` build and push a release image tagged with the version number and package the Helm chart with the same version.
+- Release chart archives are attached to the GitHub Release created from the tag and pushed to `ghcr.io/esgf2-us/data-forge-chart`.
+- PR image pushes run for same-repository pull requests; forked PRs skip the publish step.
+- The release workflow verifies that the tag matches `pyproject.toml`, `helm/data-forge/Chart.yaml`, and the chart image tag before publishing.
+- OCI chart installs are versioned; use `--version <chart-version>` to install or upgrade a specific release.

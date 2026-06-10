@@ -54,6 +54,14 @@ Render templates locally:
 helm template data-forge ./helm/data-forge
 ```
 
+Install from OCI registry:
+
+```bash
+helm install data-forge oci://ghcr.io/esgf2-us/data-forge-chart --version 0.1.1
+```
+
+Use the same `oci://` reference with a different `--version` to install a pinned chart release.
+
 Helm also validates the chart's `values.schema.json` during install, upgrade, lint, and template commands.
 
 ## Important Values

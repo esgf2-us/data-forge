@@ -9,6 +9,8 @@ The Helm chart lives in `helm/data-forge` and deploys:
 
 ## Install
 
+From the source tree:
+
 ```bash
 helm install data-forge .
 ```
@@ -18,6 +20,23 @@ To upgrade:
 ```bash
 helm upgrade data-forge .
 ```
+
+### Install From OCI Registry
+
+Latest published chart release:
+
+```bash
+helm install data-forge oci://ghcr.io/esgf2-us/data-forge-chart --version 0.1.1
+```
+
+Pinned version:
+
+```bash
+helm install data-forge oci://ghcr.io/esgf2-us/data-forge-chart --version 0.1.1
+```
+
+To install the newest available release, use the highest published chart version.
+To upgrade from OCI, use the same `oci://` reference with the desired `--version`.
 
 ## Common Overrides
 
