@@ -64,6 +64,14 @@ class StubClient:
         }
 
 
+class CapturingClient(StubClient):
+    last_base_url: str | None = None
+
+    def __init__(self, base_url: str | None = None, timeout: float = 10.0) -> None:
+        super().__init__()
+        self.__class__.last_base_url = base_url
+
+
 @pytest.fixture
 def runner() -> CliRunner:
     return CliRunner()
@@ -107,6 +115,20 @@ def test_submit_prints_job_summary_and_sends_payload(
         "inline_threshold": 300,
         "metadata": {"project": "CMIP6"},
     }
+
+
+def test_server_url_option_is_used_for_all_commands(
+    monkeypatch: pytest.MonkeyPatch, runner: CliRunner
+) -> None:
+    monkeypatch.setattr("dataforge.cli.main.DataForgeClient", CapturingClient)
+
+    result = runner.invoke(
+        app,
+        ["--server-url", "http://data-forge.example", "submit", "--input", "/tmp/a.nc"],
+    )
+
+    assert result.exit_code == 0
+    assert CapturingClient.last_base_url == "http://data-forge.example"
 
 
 def test_submit_resolves_relative_local_inputs_before_submission(
