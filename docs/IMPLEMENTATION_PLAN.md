@@ -1,15 +1,15 @@
 # Data-Forge Implementation Plan
 
 ## Overview
-This document outlines a staged approach to building Data-Forge, a service for generating Kerchunk reference files and managing catalogs for climate datasets. **Key Architecture**: the initial core flow is local input -> generate Kerchunk -> write the reference file alongside the source data on local disk. Additional output destinations (for example S3 and Globus) are future stages. The service does NOT provide internal storage; users manage their own file storage infrastructure.
+This document outlines a staged approach to building Data-Forge, a service for generating Kerchunk reference files and managing catalogs for climate datasets. **Key Architecture**: the initial core flow is local input -> generate Kerchunk -> write the reference file to user-managed storage, with local filesystem and S3 output paths supported. Additional integrations (for example Globus Auth) remain later-stage work. The service does NOT provide internal storage; users manage their own file storage infrastructure.
 
-## Current Status (May 2026)
+## Current Status (June 2026)
 
 - ✅ Stage 0: Project setup and development tooling are in place
 - ✅ Stage 1: Core Kerchunk conversion and storage writers are implemented
 - ✅ Stage 2: Job queue, REST API, and local CLI smoke-test flow are implemented
 - ✅ Stage 3: Local workflow hardening is implemented end to end
-- ⏭️ Stage 4: STAC catalog integration is planned but not yet implemented
+- ✅ Stage 4: STAC catalog integration is implemented end to end
 - ✅ Stage 5: Dask-based parallel conversion is implemented, tested, and benchmark-ready
 - ⏭️ Stage 6: Advanced metadata, validation, and monitoring work has not started
 - ◐ Stage 7: Docker/Compose support is present; Kubernetes/Helm and the full CLI scope remain incomplete
