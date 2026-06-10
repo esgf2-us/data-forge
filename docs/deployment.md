@@ -34,6 +34,8 @@ The Helm chart is located at `helm/data-forge`.
 
 The chart README lives at `helm/data-forge/README.md` and documents the user-facing values and examples.
 
+See [`docs/release-versioning.md`](release-versioning.md) for the version bump workflow.
+
 Install:
 
 ```bash

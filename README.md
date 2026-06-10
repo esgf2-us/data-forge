@@ -74,6 +74,7 @@ Install the `server` extra for the API, worker, conversion backends, STAC publis
 - S3 output overlay: `docker compose -f docker-compose.yml -f docker-compose.s3.yml up --build`
 - Helm chart for Kubernetes (production, scalable)
 - Minimal required services: API, worker(s), Redis
+- Release/versioning workflow: [`docs/release-versioning.md`](docs/release-versioning.md)
 
 For the default repo-local sample data mount, configure:
 

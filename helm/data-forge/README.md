@@ -21,7 +21,7 @@ helm upgrade data-forge .
 
 ## Common Overrides
 
-- `image.repository` / `image.tag`: container image to deploy. For production, use a fixed tag or digest instead of `latest`.
+- `image.repository` / `image.tag`: container image to deploy. The chart defaults to the current release tag; pin a digest if you need immutable deployments.
 - `worker.replicaCount`: static worker count
 - `worker.autoscaling.enabled`: enable worker HPA
 - `dataforge.outputMode`: `local` or `s3`
@@ -33,6 +33,13 @@ helm upgrade data-forge .
 - `podSecurityContext` / `containerSecurityContext`: align pod and container UID/GID with the host
 - `redis.enabled`: disable if using an external Redis service
 - `secrets.create`: disable if AWS credentials are supplied by another secret injector
+
+## Versioning
+
+- `pyproject.toml` version: application release version
+- `Chart.yaml.appVersion`: application release version
+- `Chart.yaml.version`: chart release version
+- `image.tag`: defaults to the application release version so chart installs do not use `latest`
 
 ## Local Output Mode
 
