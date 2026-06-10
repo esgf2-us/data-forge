@@ -131,6 +131,44 @@ def test_submit_resolves_relative_local_inputs_before_submission(
     }
 
 
+def test_submit_expands_local_wildcards_before_submission(
+    monkeypatch: pytest.MonkeyPatch, runner: CliRunner, tmp_path
+) -> None:
+    stub = StubClient()
+    monkeypatch.setattr("dataforge.cli.main._client", lambda: stub)
+    monkeypatch.chdir(tmp_path)
+
+    nested = tmp_path / "data" / "samples"
+    nested.mkdir(parents=True)
+    a = nested / "a.nc"
+    b = nested / "b.nc"
+    a.write_text("x", encoding="utf-8")
+    b.write_text("y", encoding="utf-8")
+
+    result = runner.invoke(app, ["submit", "--input", "data/samples/*.nc"])
+
+    assert result.exit_code == 0
+    assert stub.created_payload == {
+        "input_files": [str(a.resolve()), str(b.resolve())],
+        "concat_dims": ["time"],
+        "inline_threshold": 300,
+    }
+
+
+def test_submit_rejects_unmatched_local_wildcards(
+    monkeypatch: pytest.MonkeyPatch, runner: CliRunner, tmp_path
+) -> None:
+    stub = StubClient()
+    monkeypatch.setattr("dataforge.cli.main._client", lambda: stub)
+    monkeypatch.chdir(tmp_path)
+
+    result = runner.invoke(app, ["submit", "--input", "data/samples/*.nc"])
+
+    assert result.exit_code != 0
+    assert "no local input files matched pattern" in result.stderr
+    assert stub.created_payload is None
+
+
 def test_submit_preserves_s3_inputs(
     monkeypatch: pytest.MonkeyPatch, runner: CliRunner
 ) -> None:
