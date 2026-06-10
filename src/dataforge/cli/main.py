@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import glob
 import json
 import time
 from typing import Annotated, Any
+from urllib.parse import unquote, urlparse
 
 import typer
 
@@ -26,19 +28,43 @@ def _emit_json(payload: Any) -> None:
     typer.echo(json.dumps(payload, indent=2, sort_keys=True))
 
 
+def _expand_cli_input(value: str) -> list[str]:
+    try:
+        validate_input_reference(value)
+    except ValueError as e:
+        raise typer.BadParameter(str(e), param_hint="--input") from e
+
+    if not input_is_local(value):
+        return [value]
+
+    pattern = _local_glob_pattern(value)
+    if glob.has_magic(pattern):
+        matches = sorted(glob.glob(pattern, recursive=True))
+        if not matches:
+            raise typer.BadParameter(
+                f"no local input files matched pattern: {value}", param_hint="--input"
+            )
+        return matches
+
+    return [value]
+
+
 def _normalize_cli_inputs(input_files: list[str]) -> list[str]:
     normalized: list[str] = []
     for value in input_files:
-        try:
-            validate_input_reference(value)
-        except ValueError as e:
-            raise typer.BadParameter(str(e), param_hint="--input") from e
-
-        if input_is_local(value):
-            normalized.append(str(local_input_host_path(value)))
-        else:
-            normalized.append(value)
+        for expanded in _expand_cli_input(value):
+            if input_is_local(expanded):
+                normalized.append(str(local_input_host_path(expanded)))
+            else:
+                normalized.append(expanded)
     return normalized
+
+
+def _local_glob_pattern(value: str) -> str:
+    parsed = urlparse(value)
+    if parsed.scheme == "file":
+        return unquote(parsed.path)
+    return value
 
 
 @app.command("submit")
