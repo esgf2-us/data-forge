@@ -8,7 +8,7 @@ from dataforge.models.job import JobSubmission
 
 
 def test_local_workflow_writes_next_to_source_data(monkeypatch, tmp_path: Path) -> None:
-    from dataforge.core.converter import KerchunkConverter
+    from dataforge.core.dask_converter import DaskConverter
     from dataforge.workers.converter_worker import run_job
 
     fixtures = Path(__file__).parent / "fixtures" / "local_workflow" / "multi"
@@ -28,14 +28,14 @@ def test_local_workflow_writes_next_to_source_data(monkeypatch, tmp_path: Path) 
 
     expected_output = source_dir / "dataset.json"
 
-    def _fake_convert(self, inputs, config):
+    def _fake_convert(self, inputs, config, on_progress=None):
         assert config.output_prefix == str(source_dir.resolve())
         assert config.output_name == "dataset"
         expected_output.parent.mkdir(parents=True, exist_ok=True)
         expected_output.write_text("{}", encoding="utf-8")
         return str(expected_output)
 
-    monkeypatch.setattr(KerchunkConverter, "convert", _fake_convert)
+    monkeypatch.setattr(DaskConverter, "convert", _fake_convert)
 
     run_job(store, job.id)
 
@@ -47,7 +47,7 @@ def test_local_workflow_writes_next_to_source_data(monkeypatch, tmp_path: Path) 
 
 
 def test_local_workflow_uses_single_file_stem(monkeypatch, tmp_path: Path) -> None:
-    from dataforge.core.converter import KerchunkConverter
+    from dataforge.core.dask_converter import DaskConverter
     from dataforge.workers.converter_worker import run_job
 
     fixtures = Path(__file__).parent / "fixtures" / "local_workflow" / "single"
@@ -65,13 +65,13 @@ def test_local_workflow_uses_single_file_stem(monkeypatch, tmp_path: Path) -> No
         )
     )
 
-    def _fake_convert(self, inputs, config):
+    def _fake_convert(self, inputs, config, on_progress=None):
         assert config.output_prefix == str(source_dir.resolve())
         assert config.output_name == "dataset"
         expected_output.write_text("{}", encoding="utf-8")
         return str(expected_output)
 
-    monkeypatch.setattr(KerchunkConverter, "convert", _fake_convert)
+    monkeypatch.setattr(DaskConverter, "convert", _fake_convert)
 
     run_job(store, job.id)
 

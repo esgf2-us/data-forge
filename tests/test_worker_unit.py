@@ -54,7 +54,7 @@ def test_run_job_sets_running_progress_and_completes_with_file_result_url(
     assert got.result_url == expected_output.resolve().as_uri()
     assert got.result_metadata is not None
     assert got.result_metadata.source_count == 2
-    assert got.result_metadata.output_uri == str(expected_output)
+    assert got.result_metadata.output_uri == expected_output.resolve().as_uri()
     assert "worker job started" in caplog.text
     assert "worker job completed" in caplog.text
     assert "worker job result stored" in caplog.text
@@ -528,3 +528,90 @@ def test_run_job_can_bypass_mapping_and_use_local_output_as_href(
     assert got.status == JobStatus.COMPLETED
     assert got.publication is not None
     assert got.publication.href == str(expected_output.resolve())
+
+
+def test_run_job_exposes_host_path_for_local_outputs_and_publication(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from datetime import datetime, timezone
+
+    from dataforge.core.dask_converter import DaskConverter
+    from dataforge.models.job import JobPublication
+    from dataforge.workers.converter_worker import run_job
+
+    host_root = tmp_path / "host"
+    host_root.mkdir()
+    expected_output = host_root / "cmip6" / "job-out.json"
+    runtime_output_uri = "/datasets/cmip6/job-out.json"
+
+    monkeypatch.setenv(
+        "DATAFORGE_LOCAL_INPUT_MAPPINGS",
+        (
+            '[{"host_prefix":"'
+            + str(host_root.resolve())
+            + '","container_prefix":"/datasets"}]'
+        ),
+    )
+    monkeypatch.setenv(
+        "DATAFORGE_STAC_HREF_MAPPINGS",
+        (
+            '[{"local_prefix":"'
+            + str(host_root.resolve())
+            + '","public_prefix":"https://example.org/refs"}]'
+        ),
+    )
+
+    in_file = host_root / "cmip6" / "in.nc"
+    in_file.parent.mkdir(parents=True)
+    in_file.write_bytes(b"dummy")
+
+    store = FakeJobStore()
+    job = store.create(
+        JobSubmission(
+            input_files=[str(in_file)],
+            output_mode="local",
+            output_path="/datasets",
+            output_name="job-out",
+            publish_to_stac=True,
+            dataset_id="CMIP6.foo.bar",
+        )
+    )
+
+    def _fake_convert(self, inputs, config, on_progress=None):
+        expected_output.parent.mkdir(parents=True, exist_ok=True)
+        expected_output.write_text("{}", encoding="utf-8")
+        from dataforge.models.config import ConversionResult
+
+        return ConversionResult(
+            output_uri=runtime_output_uri, reference={}, inputs=inputs
+        )
+
+    class FakeStacClient:
+        def publish_kerchunk(self, dataset_id, href, datanode=None):
+            assert href == "https://example.org/refs/cmip6/job-out.json"
+            return JobPublication(
+                dataset_id=dataset_id,
+                collection="CMIP6",
+                item_id=dataset_id,
+                aggregate_type="kerchunk",
+                href=href,
+                datanode="esgf-node.llnl.gov",
+                asset_path="/assets/reference_file",
+                patch_applied=True,
+                published_at=datetime.now(timezone.utc),
+            )
+
+    monkeypatch.setattr(DaskConverter, "convert", _fake_convert)
+    monkeypatch.setattr(
+        "dataforge.workers.converter_worker.ESGPublisherStacClient", FakeStacClient
+    )
+
+    run_job(store, job.id)
+
+    got = store.get(job.id)
+    assert got.status == JobStatus.COMPLETED
+    assert got.result_url == expected_output.resolve().as_uri()
+    assert got.result_metadata is not None
+    assert got.result_metadata.output_uri == (host_root / "cmip6" / "job-out.json").resolve().as_uri()
+    assert got.publication is not None
+    assert got.publication.href == "https://example.org/refs/cmip6/job-out.json"

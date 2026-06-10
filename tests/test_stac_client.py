@@ -238,9 +238,7 @@ def test_publishable_href_can_bypass_mapping(
     output.write_text("{}", encoding="utf-8")
     monkeypatch.delenv("DATAFORGE_STAC_HREF_MAPPINGS", raising=False)
 
-    assert publishable_href(str(output), use_local_output_as_href=True) == str(
-        output.resolve()
-    )
+    assert publishable_href(str(output), use_local_output_as_href=True) == str(output.resolve())
 
 
 def test_publishable_href_requires_mapping_when_bypass_is_disabled(
@@ -254,3 +252,30 @@ def test_publishable_href_requires_mapping_when_bypass_is_disabled(
 
     with pytest.raises(ValueError, match="no STAC href mapping"):
         publishable_href(str(output))
+
+
+def test_publishable_href_externalizes_runtime_path_before_mapping(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    from dataforge.core.esgf_publisher import publishable_href
+
+    host_root = tmp_path / "host"
+    host_root.mkdir()
+    monkeypatch.setenv(
+        "DATAFORGE_LOCAL_INPUT_MAPPINGS",
+        (
+            '[{"host_prefix":"'
+            + str(host_root.resolve())
+            + '","container_prefix":"/datasets"}]'
+        ),
+    )
+    monkeypatch.setenv(
+        "DATAFORGE_STAC_HREF_MAPPINGS",
+        (
+            '[{"local_prefix":"'
+            + str(host_root.resolve())
+            + '","public_prefix":"https://example.org/refs"}]'
+        ),
+    )
+
+    assert publishable_href("/datasets/cmip6/job.json") == "https://example.org/refs/cmip6/job.json"

@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from dataforge.core.input_paths import (
     input_is_local,
     input_name_stem,
+    normalize_input_for_runtime,
     validate_input_reference,
 )
 from dataforge.settings import local_output_path, s3_output_path
@@ -34,7 +35,7 @@ def default_local_output_directory(input_files: list[str]) -> str:
     if not input_files:
         raise ValueError("input_files must be non-empty")
 
-    parents = [_local_path_from_input(value).parent for value in input_files]
+    parents = [Path(normalize_input_for_runtime(value)).parent for value in input_files]
     if len(parents) == 1:
         return str(parents[0])
     return os.path.commonpath([str(parent) for parent in parents])
@@ -50,20 +51,6 @@ def default_output_name(input_files: list[str]) -> str:
 
     prefix = os.path.commonprefix(stems).rstrip("._-0123456789")
     return prefix or stems[0]
-
-
-def _local_path_from_input(value: str) -> Path:
-    validate_input_reference(value)
-    if not input_is_local(value):
-        raise ValueError(
-            "input_files must reference local paths to infer local output paths"
-        )
-    if value.startswith("file://"):
-        parsed = urlparse(value)
-        path = Path(unquote(parsed.path))
-    else:
-        path = Path(value)
-    return path.expanduser().resolve()
 
 
 class JobStatus(StrEnum):
@@ -172,13 +159,14 @@ class JobSubmission(BaseModel):
             output_path = None
 
         if self.output_mode == "local" and output_path is None:
-            output_path = local_output_path()
-            if output_path is None:
-                if not all(input_is_local(value) for value in self.input_files):
+            if all(input_is_local(value) for value in self.input_files):
+                output_path = default_local_output_directory(self.input_files)
+            else:
+                output_path = local_output_path()
+                if output_path is None:
                     raise ValueError(
                         "output_path must be provided for local mode when inputs include s3 URLs"
                     )
-                output_path = default_local_output_directory(self.input_files)
         if self.output_mode == "s3" and output_path is None:
             output_path = s3_output_path()
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import Mock
@@ -51,17 +53,18 @@ def test_post_uses_env_default_local_output_path(
 ) -> None:
     c, store = client
     monkeypatch.setenv("DATAFORGE_LOCAL_OUTPUT_PATH", "/tmp/from-env")
+    input_dir = Path("/tmp/input-dir")
 
     res = c.post(
         "/api/v1/jobs",
         json={
-            "input_files": ["/tmp/input.nc"],
+            "input_files": ["/tmp/input-dir/input.nc"],
         },
     )
 
     assert res.status_code == 201
     job_id = res.json()["id"]
-    assert store.get(job_id).submission.output_path == "/tmp/from-env"
+    assert store.get(job_id).submission.output_path == str(input_dir)
     assert store.get(job_id).submission.output_mode == "local"
 
 
