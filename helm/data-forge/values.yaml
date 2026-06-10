@@ -1,0 +1,80 @@
+image:
+  repository: ghcr.io/esgf2-us/data-forge
+  tag: latest
+  pullPolicy: IfNotPresent
+
+api:
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 8000
+  resources: {}
+  podAnnotations: {}
+  extraEnv: []
+  extraVolumeMounts: []
+
+worker:
+  replicaCount: 1
+  resources: {}
+  podAnnotations: {}
+  extraEnv: []
+  extraVolumeMounts: []
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 80
+
+redis:
+  enabled: true
+  image:
+    repository: redis
+    tag: 7-alpine
+    pullPolicy: IfNotPresent
+  service:
+    port: 6379
+  persistence:
+    enabled: false
+    size: 1Gi
+  resources: {}
+
+ingress:
+  enabled: false
+  annotations: {}
+  hosts:
+    - host: data-forge.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+dataforge:
+  outputMode: local
+  corsAllowedOrigins: "*"
+  localOutputPath: /data/kerchunks
+  s3OutputPath: s3://dataforge-kerchunks/kerchunks
+  localInputMappings: []
+  extraVolumeMounts: []
+  dask:
+    nWorkers:
+    threadsPerWorker: "1"
+    memoryLimit: 2GiB
+    localDirectory:
+    processes: "true"
+    parallelThreshold: "4"
+
+storage:
+  mountPath: /data
+  size: 20Gi
+
+extraVolumes: []
+
+secrets:
+  create: true
+
+serviceAccount:
+  create: false
+
+podSecurityContext: {}
+
+containerSecurityContext: {}

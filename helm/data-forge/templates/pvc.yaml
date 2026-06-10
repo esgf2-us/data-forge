@@ -1,0 +1,17 @@
+{{- if and (not .Values.storage.existingClaim) (eq .Values.dataforge.outputMode "local") }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "data-forge.fullname" . }}-storage
+  labels:
+    {{- include "data-forge.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.storage.size }}
+  {{- if .Values.storage.storageClassName }}
+  storageClassName: {{ .Values.storage.storageClassName }}
+  {{- end }}
+{{- end }}
