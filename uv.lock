@@ -559,6 +559,7 @@ name = "data-forge"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "esgcet" },
     { name = "httpx" },
     { name = "pydantic" },
     { name = "typer" },
@@ -569,7 +570,6 @@ server = [
     { name = "dask" },
     { name = "distributed" },
     { name = "dramatiq", extra = ["redis"] },
-    { name = "esgcet" },
     { name = "fastapi" },
     { name = "fsspec" },
     { name = "h5py" },
@@ -595,7 +595,7 @@ requires-dist = [
     { name = "dask", marker = "extra == 'server'", specifier = ">=2025.0,<2026.0" },
     { name = "distributed", marker = "extra == 'server'", specifier = ">=2025.0,<2026.0" },
     { name = "dramatiq", extras = ["redis"], marker = "extra == 'server'", specifier = ">=1.17.0,<2.0.0" },
-    { name = "esgcet", marker = "extra == 'server'", git = "https://github.com/ESGF/esg-publisher.git?rev=esgf-ng-v5.4a" },
+    { name = "esgcet", git = "https://github.com/ESGF/esg-publisher.git?rev=esgf-ng-v5.4a" },
     { name = "fastapi", marker = "extra == 'server'", specifier = ">=0.115.0,<1.0.0" },
     { name = "fsspec", marker = "extra == 'server'", specifier = ">=2025.0,<2026.0" },
     { name = "h5py", marker = "extra == 'server'", specifier = ">=3.12.0,<4.0.0" },
