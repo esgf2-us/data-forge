@@ -6,7 +6,7 @@ import pytest
 def test_publish_kerchunk_fetches_item_builds_patch_and_publishes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from dataforge.core.stac_client import ESGPublisherStacClient
+    import dataforge.core.stac_client as stac_client
 
     dataset_id = "CMIP6.CMIP.NCAR.CESM2.historical.Amon.tas.gn.v20190308"
     href = "/tmp/out/job.json"
@@ -61,17 +61,12 @@ def test_publish_kerchunk_fetches_item_builds_patch_and_publishes(
     monkeypatch.setenv("DATAFORGE_STAC_API", "https://stac.example.org")
     monkeypatch.setenv("DATAFORGE_STAC_TRANSACTION_API", "https://txn.example.org")
     monkeypatch.setenv("DATAFORGE_STAC_DATANODE", "esgf-node.llnl.gov")
-    monkeypatch.setattr(
-        "dataforge.core.stac_client._load_esgcet",
-        lambda: (
-            FakeSearchCheck,
-            _fake_get_transaction_client,
-            FakeESGSTACConverter,
-            FakeESGSTACItem,
-        ),
-    )
+    monkeypatch.setattr(stac_client, "ESGSearchCheck", FakeSearchCheck)
+    monkeypatch.setattr(stac_client, "getTransactionClient", _fake_get_transaction_client)
+    monkeypatch.setattr(stac_client, "ESGSTACConverter", FakeESGSTACConverter)
+    monkeypatch.setattr(stac_client, "ESGSTACItem", FakeESGSTACItem)
 
-    publication = ESGPublisherStacClient().publish_kerchunk(dataset_id, href)
+    publication = stac_client.ESGPublisherStacClient().publish_kerchunk(dataset_id, href)
 
     assert publication.dataset_id == dataset_id
     assert publication.collection == "CMIP6"
@@ -86,7 +81,7 @@ def test_publish_kerchunk_fetches_item_builds_patch_and_publishes(
 def test_publish_kerchunk_raises_when_dataset_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from dataforge.core.stac_client import ESGPublisherStacClient
+    import dataforge.core.stac_client as stac_client
 
     class FakeSearchCheck:
         def __init__(self, stac_api, verbose, silent) -> None:
@@ -95,27 +90,98 @@ def test_publish_kerchunk_raises_when_dataset_missing(
         def stac_item_fetch(self, got_dataset_id):
             return None
 
+    class FakeESGSTACConverter:
+        def __init__(self, stac_config) -> None:
+            self.stac_api = stac_config["stac_api"]
+
+    class FakeESGSTACItem:
+        def __init__(self, got_item) -> None:
+            pass
+
+        def add_aggregate(self, aggregate_type, got_href, site):
+            return [{"op": "add", "path": "/assets/reference_file", "value": {"href": got_href}}]
+
+    def _fake_get_transaction_client(stac_config):
+        def _factory(config):
+            class FakeTransactionClient:
+                def json_patch(self, collection, item_id, entry):
+                    return True
+
+            return FakeTransactionClient()
+
+        return _factory
+
     monkeypatch.setenv("DATAFORGE_STAC_API", "https://stac.example.org")
     monkeypatch.setenv("DATAFORGE_STAC_DATANODE", "esgf-node.llnl.gov")
-    monkeypatch.setattr(
-        "dataforge.core.stac_client._load_esgcet",
-        lambda: (FakeSearchCheck, object, object, object),
-    )
+    monkeypatch.setattr(stac_client, "ESGSearchCheck", FakeSearchCheck)
+    monkeypatch.setattr(stac_client, "getTransactionClient", _fake_get_transaction_client)
+    monkeypatch.setattr(stac_client, "ESGSTACConverter", FakeESGSTACConverter)
+    monkeypatch.setattr(stac_client, "ESGSTACItem", FakeESGSTACItem)
 
     with pytest.raises(RuntimeError, match="dataset not found"):
-        ESGPublisherStacClient().publish_kerchunk("CMIP6.foo.bar", "/tmp/out/job.json")
+        stac_client.ESGPublisherStacClient().publish_kerchunk(
+            "CMIP6.foo.bar", "/tmp/out/job.json"
+        )
 
 
 def test_publish_kerchunk_requires_configured_datanode(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from dataforge.core.stac_client import ESGPublisherStacClient
+    import dataforge.core.stac_client as stac_client
 
     monkeypatch.delenv("DATAFORGE_STAC_DATANODE", raising=False)
     monkeypatch.setenv("DATAFORGE_STAC_API", "https://stac.example.org")
 
     with pytest.raises(ValueError, match="STAC datanode"):
-        ESGPublisherStacClient().publish_kerchunk("CMIP6.foo.bar", "/tmp/out/job.json")
+        stac_client.ESGPublisherStacClient().publish_kerchunk(
+            "CMIP6.foo.bar", "/tmp/out/job.json"
+        )
+
+
+def test_publish_kerchunk_requires_item_collection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import dataforge.core.stac_client as stac_client
+
+    dataset_id = "CMIP6.CMIP.NCAR.CESM2.historical.Amon.tas.gn.v20190308"
+
+    class FakeSearchCheck:
+        def __init__(self, stac_api, verbose, silent) -> None:
+            pass
+
+        def stac_item_fetch(self, got_dataset_id):
+            return {"assets": {}}
+
+    class FakeESGSTACConverter:
+        def __init__(self, stac_config) -> None:
+            self.stac_api = stac_config["stac_api"]
+
+    class FakeESGSTACItem:
+        def __init__(self, got_item) -> None:
+            pass
+
+        def add_aggregate(self, aggregate_type, got_href, site):
+            return [{"op": "add", "path": "/assets/reference_file", "value": {"href": got_href}}]
+
+    def _fake_get_transaction_client(stac_config):
+        def _factory(config):
+            class FakeTransactionClient:
+                def json_patch(self, collection, item_id, entry):
+                    return True
+
+            return FakeTransactionClient()
+
+        return _factory
+
+    monkeypatch.setenv("DATAFORGE_STAC_API", "https://stac.example.org")
+    monkeypatch.setenv("DATAFORGE_STAC_DATANODE", "esgf-node.llnl.gov")
+    monkeypatch.setattr(stac_client, "ESGSearchCheck", FakeSearchCheck)
+    monkeypatch.setattr(stac_client, "getTransactionClient", _fake_get_transaction_client)
+    monkeypatch.setattr(stac_client, "ESGSTACConverter", FakeESGSTACConverter)
+    monkeypatch.setattr(stac_client, "ESGSTACItem", FakeESGSTACItem)
+
+    with pytest.raises(RuntimeError, match="missing collection metadata"):
+        stac_client.ESGPublisherStacClient().publish_kerchunk(dataset_id, "/tmp/out/job.json")
 
 
 def test_publishable_href_maps_longest_matching_prefix(

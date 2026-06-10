@@ -4,6 +4,10 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
+from esgcet.search_check import ESGSearchCheck
+from esgcet.stac_client import getTransactionClient
+from esgcet.stac_converter import ESGSTACConverter, ESGSTACItem
+
 from dataforge.models.job import JobPublication
 from dataforge.settings import (
     stac_api,
@@ -11,15 +15,6 @@ from dataforge.settings import (
     stac_datanode,
     stac_transaction_api,
 )
-
-
-def _load_esgcet() -> tuple[Any, Any, Any, Any]:
-    from esgcet.search_check import ESGSearchCheck
-    from esgcet.stac_client import getTransactionClient
-    from esgcet.stac_converter import ESGSTACConverter, ESGSTACItem
-
-    return ESGSearchCheck, getTransactionClient, ESGSTACConverter, ESGSTACItem
-
 
 @dataclass(frozen=True)
 class StacPublishResult:
@@ -44,10 +39,6 @@ class ESGPublisherStacClient:
         if not discovery_api:
             raise ValueError("DATAFORGE_STAC_API must be configured for publish jobs")
 
-        ESGSearchCheck, getTransactionClient, ESGSTACConverter, ESGSTACItem = (
-            _load_esgcet()
-        )
-
         config = self._publisher_config(discovery_api)
 
         search = ESGSearchCheck(stac_api=discovery_api, verbose=False, silent=True)
@@ -67,9 +58,9 @@ class ESGPublisherStacClient:
         transaction_factory = getTransactionClient(config["stac_config"])
         transaction_client = transaction_factory(config)
 
-        collection = str(
-            item.get("collection") or self._collection_from_dataset_id(dataset_id)
-        )
+        collection = str(item.get("collection") or "").strip()
+        if not collection:
+            raise RuntimeError("STAC item is missing collection metadata")
         applied = bool(
             transaction_client.json_patch(collection, item_id=dataset_id, entry=ops)
         )
@@ -108,10 +99,3 @@ class ESGPublisherStacClient:
             "silent": True,
             "verbose": False,
         }
-
-    @staticmethod
-    def _collection_from_dataset_id(dataset_id: str) -> str:
-        project = dataset_id.split(".", 1)[0]
-        if project.upper() == "MIP-DRS7":
-            return "CMIP7"
-        return project
