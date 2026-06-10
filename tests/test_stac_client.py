@@ -61,10 +61,16 @@ def test_publish_kerchunk_fetches_item_builds_patch_and_publishes(
     monkeypatch.setenv("DATAFORGE_STAC_API", "https://stac.example.org")
     monkeypatch.setenv("DATAFORGE_STAC_TRANSACTION_API", "https://txn.example.org")
     monkeypatch.setenv("DATAFORGE_STAC_DATANODE", "esgf-node.llnl.gov")
-    monkeypatch.setattr(stac_client, "ESGSearchCheck", FakeSearchCheck)
-    monkeypatch.setattr(stac_client, "getTransactionClient", _fake_get_transaction_client)
-    monkeypatch.setattr(stac_client, "ESGSTACConverter", FakeESGSTACConverter)
-    monkeypatch.setattr(stac_client, "ESGSTACItem", FakeESGSTACItem)
+    monkeypatch.setattr(
+        stac_client,
+        "_load_esgcet",
+        lambda: (
+            FakeSearchCheck,
+            _fake_get_transaction_client,
+            FakeESGSTACConverter,
+            FakeESGSTACItem,
+        ),
+    )
 
     publication = stac_client.ESGPublisherStacClient().publish_kerchunk(dataset_id, href)
 
@@ -113,10 +119,16 @@ def test_publish_kerchunk_raises_when_dataset_missing(
 
     monkeypatch.setenv("DATAFORGE_STAC_API", "https://stac.example.org")
     monkeypatch.setenv("DATAFORGE_STAC_DATANODE", "esgf-node.llnl.gov")
-    monkeypatch.setattr(stac_client, "ESGSearchCheck", FakeSearchCheck)
-    monkeypatch.setattr(stac_client, "getTransactionClient", _fake_get_transaction_client)
-    monkeypatch.setattr(stac_client, "ESGSTACConverter", FakeESGSTACConverter)
-    monkeypatch.setattr(stac_client, "ESGSTACItem", FakeESGSTACItem)
+    monkeypatch.setattr(
+        stac_client,
+        "_load_esgcet",
+        lambda: (
+            FakeSearchCheck,
+            _fake_get_transaction_client,
+            FakeESGSTACConverter,
+            FakeESGSTACItem,
+        ),
+    )
 
     with pytest.raises(RuntimeError, match="dataset not found"):
         stac_client.ESGPublisherStacClient().publish_kerchunk(
@@ -175,10 +187,16 @@ def test_publish_kerchunk_requires_item_collection(
 
     monkeypatch.setenv("DATAFORGE_STAC_API", "https://stac.example.org")
     monkeypatch.setenv("DATAFORGE_STAC_DATANODE", "esgf-node.llnl.gov")
-    monkeypatch.setattr(stac_client, "ESGSearchCheck", FakeSearchCheck)
-    monkeypatch.setattr(stac_client, "getTransactionClient", _fake_get_transaction_client)
-    monkeypatch.setattr(stac_client, "ESGSTACConverter", FakeESGSTACConverter)
-    monkeypatch.setattr(stac_client, "ESGSTACItem", FakeESGSTACItem)
+    monkeypatch.setattr(
+        stac_client,
+        "_load_esgcet",
+        lambda: (
+            FakeSearchCheck,
+            _fake_get_transaction_client,
+            FakeESGSTACConverter,
+            FakeESGSTACItem,
+        ),
+    )
 
     with pytest.raises(RuntimeError, match="missing collection metadata"):
         stac_client.ESGPublisherStacClient().publish_kerchunk(dataset_id, "/tmp/out/job.json")
