@@ -4,10 +4,6 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-from esgcet.search_check import ESGSearchCheck
-from esgcet.stac_client import getTransactionClient
-from esgcet.stac_converter import ESGSTACConverter, ESGSTACItem
-
 from dataforge.models.job import JobPublication
 from dataforge.settings import (
     stac_api,
@@ -15,6 +11,14 @@ from dataforge.settings import (
     stac_datanode,
     stac_transaction_api,
 )
+
+
+def _load_esgcet() -> tuple[Any, Any, Any, Any]:
+    from esgcet.search_check import ESGSearchCheck
+    from esgcet.stac_client import getTransactionClient
+    from esgcet.stac_converter import ESGSTACConverter, ESGSTACItem
+
+    return ESGSearchCheck, getTransactionClient, ESGSTACConverter, ESGSTACItem
 
 @dataclass(frozen=True)
 class StacPublishResult:
@@ -38,6 +42,10 @@ class ESGPublisherStacClient:
         discovery_api = stac_api()
         if not discovery_api:
             raise ValueError("DATAFORGE_STAC_API must be configured for publish jobs")
+
+        ESGSearchCheck, getTransactionClient, ESGSTACConverter, ESGSTACItem = (
+            _load_esgcet()
+        )
 
         config = self._publisher_config(discovery_api)
 
