@@ -1,4 +1,4 @@
-name: Main Image Test
+name: Main Smoke Test
 
 on:
   push:

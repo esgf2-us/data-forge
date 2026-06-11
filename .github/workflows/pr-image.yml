@@ -1,4 +1,4 @@
-name: PR Image
+name: PR Test
 
 on:
   pull_request:

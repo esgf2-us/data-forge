@@ -36,8 +36,8 @@ This updates:
 
 ## GitHub Actions
 
-- Pull requests run `pytest`; same-repository PRs also build a preview image tagged `pr-<number>` and smoke test the `PR Image` workflow against the pushed image.
-- Pushes to `main` run the `Main Image Test` workflow against the published `latest` image.
+- Pull requests run `pytest`; same-repository PRs also build a preview image tagged `pr-<number>` and smoke test the `PR Test` workflow against the pushed image.
+- Pushes to `main` run the `Main Smoke Test` workflow against the published `latest` image.
 - Git tags matching `v*` build and push a release image tagged with the version number and package the Helm chart with the same version.
 - Release chart archives are attached to the GitHub Release created from the tag and pushed to `ghcr.io/esgf2-us/data-forge-chart`.
 - The release workflow verifies that the tag matches `pyproject.toml`, `helm/data-forge/Chart.yaml`, and the chart image tag before publishing.
