@@ -47,17 +47,25 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set PR image tag
-        run: echo "DATAFORGE_IMAGE_TAG=pr-${{ github.event.number }}" >> "$GITHUB_ENV"
+      - name: Extract PR metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/esgf2-us/data-forge
+          tags: |
+            type=raw,value=pr-${{ github.event.number }}
 
       - name: Build and push PR image
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          tags: ghcr.io/esgf2-us/data-forge:pr-${{ github.event.number }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
 
       - name: Start stack from image
+        env:
+          DATAFORGE_IMAGE_TAG: pr-${{ github.event.number }}
         run: docker compose -f compose.yaml up -d --no-build redis api worker
 
       - name: Wait for API health

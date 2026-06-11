@@ -65,14 +65,22 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Extract release metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/esgf2-us/data-forge
+          tags: |
+            type=raw,value=${{ needs.verify-version.outputs.version }}
+            type=raw,value=latest
+
       - name: Build and push release image
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          tags: |
-            ghcr.io/esgf2-us/data-forge:${{ needs.verify-version.outputs.version }}
-            ghcr.io/esgf2-us/data-forge:latest
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
 
   publish-chart:
     needs:
