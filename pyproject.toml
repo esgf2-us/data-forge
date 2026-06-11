@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "data-forge"
-version = "0.1.0"
+version = "0.1.1"
 description = "Asynchronous service for generating Kerchunk reference files"
 authors = ["Jason Boutte <boutte3@llnl.gov>"]
 license = "MIT"
@@ -8,7 +8,7 @@ packages = [{ include = "dataforge", from = "src" }]
 
 [project]
 name = "data-forge"
-version = "0.1.0"
+version = "0.1.1"
 description = "Asynchronous service for generating Kerchunk reference files"
 requires-python = ">=3.13,<3.15"
 dependencies = [

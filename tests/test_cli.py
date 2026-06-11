@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from click.utils import strip_ansi
 from typer.testing import CliRunner
 
 from dataforge.cli.main import app
@@ -64,6 +65,14 @@ class StubClient:
         }
 
 
+class CapturingClient(StubClient):
+    last_base_url: str | None = None
+
+    def __init__(self, base_url: str | None = None, timeout: float = 10.0) -> None:
+        super().__init__()
+        self.__class__.last_base_url = base_url
+
+
 @pytest.fixture
 def runner() -> CliRunner:
     return CliRunner()
@@ -107,6 +116,20 @@ def test_submit_prints_job_summary_and_sends_payload(
         "inline_threshold": 300,
         "metadata": {"project": "CMIP6"},
     }
+
+
+def test_server_url_option_is_used_for_all_commands(
+    monkeypatch: pytest.MonkeyPatch, runner: CliRunner
+) -> None:
+    monkeypatch.setattr("dataforge.cli.main.DataForgeClient", CapturingClient)
+
+    result = runner.invoke(
+        app,
+        ["--server-url", "http://data-forge.example", "submit", "--input", "/tmp/a.nc"],
+    )
+
+    assert result.exit_code == 0
+    assert CapturingClient.last_base_url == "http://data-forge.example"
 
 
 def test_submit_resolves_relative_local_inputs_before_submission(
@@ -165,7 +188,8 @@ def test_submit_rejects_unmatched_local_wildcards(
     result = runner.invoke(app, ["submit", "--input", "data/samples/*.nc"])
 
     assert result.exit_code != 0
-    assert "no local input files matched pattern" in result.stderr
+    normalized = " ".join(strip_ansi(result.output).split())
+    assert "no local input files matched pattern" in normalized
     assert stub.created_payload is None
 
 
@@ -279,7 +303,8 @@ def test_submit_rejects_invalid_metadata(
     result = runner.invoke(app, ["submit", "--input", "/tmp/a.nc", "--metadata", "{"])
 
     assert result.exit_code != 0
-    assert "--metadata must be valid JSON" in result.stderr
+    normalized = " ".join(strip_ansi(result.output).split())
+    assert "--metadata must be valid JSON" in normalized
 
 
 def test_status_prints_progress(

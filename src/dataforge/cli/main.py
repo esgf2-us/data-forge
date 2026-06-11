@@ -6,6 +6,7 @@ import time
 from typing import Annotated, Any
 from urllib.parse import unquote, urlparse
 
+import click
 import typer
 
 from dataforge.client.api import DataForgeClient
@@ -20,8 +21,26 @@ stac_app = typer.Typer(add_completion=False, no_args_is_help=True)
 app.add_typer(stac_app, name="stac")
 
 
+class CliConfig:
+    def __init__(self, server_url: str | None = None) -> None:
+        self.server_url = server_url
+
+
+@app.callback()
+def main(
+    ctx: typer.Context,
+    server_url: Annotated[
+        str | None,
+        typer.Option("--server-url", help="Data-Forge server address."),
+    ] = None,
+) -> None:
+    ctx.obj = CliConfig(server_url=server_url)
+
+
 def _client() -> DataForgeClient:
-    return DataForgeClient()
+    ctx = click.get_current_context()
+    state = ctx.obj if isinstance(ctx.obj, CliConfig) else None
+    return DataForgeClient(base_url=state.server_url if state else None)
 
 
 def _emit_json(payload: Any) -> None:
