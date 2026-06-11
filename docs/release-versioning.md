@@ -5,7 +5,7 @@ Data-Forge uses a simple release scheme:
 - `pyproject.toml` version is the application release version.
 - `helm/data-forge/Chart.yaml` `appVersion` tracks the application release version.
 - `helm/data-forge/Chart.yaml` `version` tracks the chart release version.
-- `helm/data-forge/values.yaml` and `helm/data-forge/overrides.yaml` pin the deployable image tag to the application release version.
+- `helm/data-forge/values.yaml` pins the deployable image tag to the application release version.
 
 ## Bumping a Release
 
@@ -25,7 +25,7 @@ This updates:
 ## Before Opening a PR
 
 - Run `helm lint helm/data-forge`
-- Run `helm template data-forge helm/data-forge -f helm/data-forge/overrides.yaml`
+- Run `helm template data-forge helm/data-forge`
 - Run the targeted test suite for the changes
 
 ## Release Rule of Thumb
