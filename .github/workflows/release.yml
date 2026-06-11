@@ -10,8 +10,10 @@ permissions:
   packages: write
 
 jobs:
-  build-and-publish:
+  verify-version:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -46,6 +48,13 @@ jobs:
               raise SystemExit("values.yaml image tag does not match release tag")
           PY
 
+  build-image:
+    needs: verify-version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -61,7 +70,18 @@ jobs:
         with:
           context: .
           push: true
-          tags: ghcr.io/esgf2-us/data-forge:${{ steps.version.outputs.version }}
+          tags: |
+            ghcr.io/esgf2-us/data-forge:${{ needs.verify-version.outputs.version }}
+            ghcr.io/esgf2-us/data-forge:latest
+
+  publish-chart:
+    needs:
+      - verify-version
+      - build-image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
 
       - name: Set up Helm
         uses: azure/setup-helm@v4
@@ -69,7 +89,7 @@ jobs:
       - name: Package chart
         run: |
           mkdir -p dist
-          helm package helm/data-forge --destination dist --version "${{ steps.version.outputs.version }}" --app-version "${{ steps.version.outputs.version }}"
+          helm package helm/data-forge --destination dist --version "${{ needs.verify-version.outputs.version }}" --app-version "${{ needs.verify-version.outputs.version }}"
 
       - name: Log in to Helm registry
         run: |
@@ -77,7 +97,7 @@ jobs:
 
       - name: Push chart to OCI registry
         run: |
-          helm push "dist/data-forge-${{ steps.version.outputs.version }}.tgz" "oci://ghcr.io/esgf2-us/data-forge-chart"
+          helm push "dist/data-forge-${{ needs.verify-version.outputs.version }}.tgz" "oci://ghcr.io/esgf2-us/data-forge-chart"
 
       - name: Upload chart release asset
         uses: softprops/action-gh-release@v2
