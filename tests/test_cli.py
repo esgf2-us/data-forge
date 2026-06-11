@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from click.utils import strip_ansi
 from typer.testing import CliRunner
 
 from dataforge.cli.main import app
@@ -187,7 +188,8 @@ def test_submit_rejects_unmatched_local_wildcards(
     result = runner.invoke(app, ["submit", "--input", "data/samples/*.nc"])
 
     assert result.exit_code != 0
-    assert "no local input files matched pattern" in result.stderr
+    normalized = " ".join(strip_ansi(result.output).split())
+    assert "no local input files matched pattern" in normalized
     assert stub.created_payload is None
 
 
@@ -301,7 +303,8 @@ def test_submit_rejects_invalid_metadata(
     result = runner.invoke(app, ["submit", "--input", "/tmp/a.nc", "--metadata", "{"])
 
     assert result.exit_code != 0
-    assert "--metadata must be valid JSON" in result.output
+    normalized = " ".join(strip_ansi(result.output).split())
+    assert "--metadata must be valid JSON" in normalized
 
 
 def test_status_prints_progress(
