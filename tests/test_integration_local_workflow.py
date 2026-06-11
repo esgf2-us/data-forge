@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 
 from dataforge.job_store.fake import FakeJobStore
@@ -11,9 +10,10 @@ def test_local_workflow_writes_next_to_source_data(monkeypatch, tmp_path: Path) 
     from dataforge.core.dask_converter import DaskConverter
     from dataforge.workers.converter_worker import run_job
 
-    fixtures = Path(__file__).parent / "fixtures" / "local_workflow" / "multi"
     source_dir = tmp_path / "source"
-    shutil.copytree(fixtures / "source", source_dir)
+    source_dir.mkdir(parents=True)
+    (source_dir / "dataset_001.nc").write_text("one", encoding="utf-8")
+    (source_dir / "dataset_002.nc").write_text("two", encoding="utf-8")
 
     in_file1 = source_dir / "dataset_001.nc"
     in_file2 = source_dir / "dataset_002.nc"
@@ -50,9 +50,9 @@ def test_local_workflow_uses_single_file_stem(monkeypatch, tmp_path: Path) -> No
     from dataforge.core.dask_converter import DaskConverter
     from dataforge.workers.converter_worker import run_job
 
-    fixtures = Path(__file__).parent / "fixtures" / "local_workflow" / "single"
     source_dir = tmp_path / "single"
-    shutil.copytree(fixtures, source_dir)
+    source_dir.mkdir(parents=True)
+    (source_dir / "dataset.nc").write_text("one", encoding="utf-8")
 
     in_file = source_dir / "dataset.nc"
     expected_output = source_dir / "dataset.json"
