@@ -20,6 +20,10 @@ RUN python -m venv /opt/venv \
 
 FROM python:3.14-slim AS runtime
 
+LABEL org.opencontainers.image.source="https://github.com/esgf2-us/data-forge" \
+      org.opencontainers.image.description="Asynchronous service for generating data access representations and publishing searchable catalogs for large climate datasets." \
+      org.opencontainers.image.licenses="MIT"
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH="/opt/venv/bin:$PATH"
