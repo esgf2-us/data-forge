@@ -2,6 +2,9 @@ x-dataforge-common: &dataforge-common
   build:
     context: .
     target: runtime
+    args:
+      APP_UID: ${DATAFORGE_UID:-1000}
+      APP_GID: ${DATAFORGE_GID:-1000}
   image: ghcr.io/esgf2-us/data-forge:${DATAFORGE_IMAGE_TAG:-dev}
   restart: unless-stopped
   environment: &dataforge-env
