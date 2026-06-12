@@ -12,7 +12,7 @@ This document outlines a staged approach to building Data-Forge, a service for g
 - ✅ Stage 4: STAC catalog integration is implemented end to end
 - ✅ Stage 5: Dask-based parallel conversion is implemented, tested, and benchmark-ready
 - ⏭️ Stage 6: Advanced metadata, validation, and monitoring work has not started
-- ◐ Stage 7: Docker/Compose support is present; Kubernetes/Helm and the full CLI scope remain incomplete
+- ✅ Stage 7: Docker, Kubernetes, and deployment packaging are implemented
 - ⏭️ Stage 8: Globus Auth integration has not started
 - ⏭️ Stage 9: Production hardening, security completion, and final readiness validation remain ahead
 
@@ -91,7 +91,7 @@ This document outlines a staged approach to building Data-Forge, a service for g
     - Support writing to S3 (s3://)
     - Support writing to local filesystem
     - Handle authentication for output destinations
-    - Add a docker-compose overlay for local S3-compatible testing and output validation
+     - Add a Compose overlay for local S3-compatible testing and output validation
 
 3. **Configuration** (`src/dataforge/models/config.py`)
      - Define conversion configuration model:
@@ -461,12 +461,11 @@ This document outlines a staged approach to building Data-Forge, a service for g
 
 ---
 
-## Stage 7: Docker, Kubernetes & CLI Tool (Week 11-12)
+## Stage 7: Docker, Kubernetes & Deployment Packaging (Week 11-12)
 
 ### Goals
 - Containerize all services
 - Production-ready Kubernetes deployment with Helm
-- Build CLI tool matching PRD examples
 - Complete deployment infrastructure
 
 ### Tasks
@@ -477,7 +476,7 @@ This document outlines a staged approach to building Data-Forge, a service for g
    - Pin dependencies for reproducibility
    - Security scanning integration
 
-2. **Docker Compose** (`docker-compose.yml`)
+2. **Docker Compose** (`compose.yaml`)
    - API service (FastAPI)
    - Worker service(s) (dramatiq)
    - Redis service (job metadata)
@@ -495,51 +494,24 @@ This document outlines a staged approach to building Data-Forge, a service for g
    - Resource limits and requests
    - Liveness and readiness probes
 
-4. **Helm Chart** (`deployments/helm/`)
+4. **Helm Chart** (`helm/data-forge/`)
    - Values.yaml for configuration
    - Templates for all Kubernetes resources
    - Support for multiple environments (dev, staging, prod)
    - Parameterized scaling configuration
    - Documentation for Helm deployment
 
-5. **CLI Tool** (`src/dataforge/cli/`)
-   - Use Click framework
-   - Implement commands per PRD examples:
-     - `dataforge login` - Authenticate (Globus Auth in Stage 8)
-     - `dataforge submit` - Submit job with all options
-     - `dataforge status <job-id>` - Check job status
-     - `dataforge list` - List jobs with filtering
-     - `dataforge get-url <job-id>` - Get result URL
-     - `dataforge stac show <job-id>` - View STAC item
-   - Support `--watch` for real-time status updates
-   - Colorized output with status indicators
-   - Progress bars for running jobs
-
-6. **CLI Client Library** (`src/dataforge/client/`)
-   - Create Python API client wrapping REST API
-   - Used by CLI and available for programmatic access
-   - Handle authentication, retries, pagination
-   - Async and sync variants
-
-7. **CLI Features**
-   - Rich progress display (files processed / total)
-   - Table formatting for job lists
-   - JSON output option for scripting
-   - Configuration file support (~/.dataforge/config)
-   - Batch job submission from YAML/JSON
-
-8. **Configuration Management**
+5. **Configuration Management**
    - Environment variable configuration
    - `.env` file for local development
    - Secrets management (Redis password, S3 credentials, STAC API token)
    - Support for multiple environments (dev, staging, prod)
    - Kubernetes-native secret management
 
-9. **Documentation**
+6. **Documentation**
    - Docker Compose deployment guide
    - Kubernetes deployment guide
    - Helm chart documentation
-   - CLI usage guide with examples matching PRD
    - Configuration reference
    - Environment variable documentation
    - Troubleshooting guide
@@ -549,8 +521,6 @@ This document outlines a staged approach to building Data-Forge, a service for g
 - ✅ Docker Compose setup for single-node deployment
 - ✅ Production-ready Kubernetes deployment
 - ✅ Helm chart for easy deployment
-- ✅ Full-featured CLI tool matching PRD examples
-- ✅ Python client library
 - ✅ Comprehensive deployment documentation
 
 ---

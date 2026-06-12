@@ -10,6 +10,7 @@ from dramatiq.brokers.redis import RedisBroker
 
 from dataforge.core.dask_converter import DaskConverter
 from dataforge.core.esgf_publisher import publishable_href
+from dataforge.core.input_paths import externalize_runtime_path
 from dataforge.core.metadata import build_result_metadata
 from dataforge.core.stac_client import ESGPublisherStacClient
 from dataforge.job_store.base import JobStore
@@ -39,11 +40,7 @@ def _ensure_worker_logging() -> None:
 
 def _local_result_url(output_uri: str) -> str:
     # Return an absolute file:// URL for local outputs.
-    if output_uri.startswith("file://"):
-        parsed = urlparse(output_uri)
-        p = Path(unquote(parsed.path)).resolve()
-        return p.as_uri()
-    return Path(output_uri).resolve().as_uri()
+    return Path(externalize_runtime_path(output_uri)).resolve().as_uri()
 
 
 def run_job(store: JobStore, job_id: str) -> None:
@@ -140,13 +137,15 @@ def run_job(store: JobStore, job_id: str) -> None:
         if submission.output_mode == "local":
             result_url = _local_result_url(result_url)
 
+        result_uri_for_metadata = result_url if submission.output_mode == "local" else str(output_uri)
+
         store.set_result(job_id, result_url)
         logger.info("worker job result stored", extra={"job_id": job_id})
         store.set_result_metadata(
             job_id,
             build_result_metadata(
                 inputs=list(submission.input_files),
-                output_uri=str(output_uri),
+                output_uri=result_uri_for_metadata,
                 dataset_id=submission.dataset_id,
                 user_metadata=submission.metadata,
             ),
@@ -154,8 +153,9 @@ def run_job(store: JobStore, job_id: str) -> None:
         logger.info("worker job metadata stored", extra={"job_id": job_id})
 
         if submission.publish_to_stac:
+            publish_output_uri = result_uri_for_metadata
             publish_href = publishable_href(
-                str(output_uri),
+                publish_output_uri,
                 use_local_output_as_href=submission.use_local_output_as_href,
             )
             try:

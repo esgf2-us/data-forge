@@ -2,6 +2,7 @@ x-dataforge-common: &dataforge-common
   build:
     context: .
     target: runtime
+  image: ghcr.io/esgf2-us/data-forge:${DATAFORGE_IMAGE_TAG:-dev}
   restart: unless-stopped
   environment: &dataforge-env
     DATAFORGE_BROKER_REDIS_URL: ${DATAFORGE_BROKER_REDIS_URL:-redis://redis:6379/0}

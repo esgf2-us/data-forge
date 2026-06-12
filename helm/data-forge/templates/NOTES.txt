@@ -1,0 +1,8 @@
+1. Get the API service endpoint:
+
+  kubectl get svc {{ include "data-forge.fullname" . }}-api
+
+2. Check API health:
+
+  kubectl port-forward svc/{{ include "data-forge.fullname" . }}-api 8000:{{ .Values.api.service.port }}
+  curl http://127.0.0.1:8000/health

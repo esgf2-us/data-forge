@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from dataforge.core.input_paths import externalize_runtime_path
 from dataforge.settings import stac_href_mappings
 
 
@@ -9,9 +10,9 @@ def publishable_href(output_uri: str, *, use_local_output_as_href: bool = False)
     if output_uri.startswith("s3://"):
         return output_uri
 
-    local_path = str(Path(output_uri).resolve())
+    local_path = externalize_runtime_path(output_uri)
     if use_local_output_as_href:
-        return local_path
+        return str(Path(local_path).resolve())
 
     mappings = stac_href_mappings()
     for local_prefix, public_prefix in sorted(

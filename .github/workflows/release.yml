@@ -1,0 +1,113 @@
+name: Publish Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  verify-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Derive release version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify checked-in versions match tag
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          version = "${{ steps.version.outputs.version }}"
+          pyproject = Path("pyproject.toml").read_text(encoding="utf-8")
+          chart = Path("helm/data-forge/Chart.yaml").read_text(encoding="utf-8")
+          values = Path("helm/data-forge/values.yaml").read_text(encoding="utf-8")
+
+          py_versions = re.findall(r'^version = "([^"]+)"$', pyproject, flags=re.M)
+          if len(py_versions) < 2 or any(v != version for v in py_versions[:2]):
+              raise SystemExit("pyproject.toml version does not match release tag")
+
+          chart_version = re.search(r'^version: (.+)$', chart, flags=re.M)
+          app_version = re.search(r'^appVersion: "([^"]+)"$', chart, flags=re.M)
+          image_tag = re.search(r'^  tag: (.+)$', values, flags=re.M)
+          if not chart_version or chart_version.group(1) != version:
+              raise SystemExit("Chart.yaml version does not match release tag")
+          if not app_version or app_version.group(1) != version:
+              raise SystemExit("Chart.yaml appVersion does not match release tag")
+          if not image_tag or image_tag.group(1) != version:
+              raise SystemExit("values.yaml image tag does not match release tag")
+          PY
+
+  build-image:
+    needs: verify-version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract release metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/esgf2-us/data-forge
+          tags: |
+            type=raw,value=${{ needs.verify-version.outputs.version }}
+            type=raw,value=latest
+
+      - name: Build and push release image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  publish-chart:
+    needs:
+      - verify-version
+      - build-image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Package chart
+        run: |
+          mkdir -p dist
+          helm package helm/data-forge --destination dist --version "${{ needs.verify-version.outputs.version }}" --app-version "${{ needs.verify-version.outputs.version }}"
+
+      - name: Log in to Helm registry
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io --username "${{ github.actor }}" --password-stdin
+
+      - name: Push chart to OCI registry
+        run: |
+          helm push "dist/data-forge-${{ needs.verify-version.outputs.version }}.tgz" "oci://ghcr.io/esgf2-us/data-forge-chart"
+
+      - name: Upload chart release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.tgz

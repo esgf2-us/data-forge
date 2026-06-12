@@ -72,6 +72,33 @@ def normalize_input_for_runtime(value: str) -> str:
     )
 
 
+def externalize_runtime_path(value: str) -> str:
+    parsed = urlparse(value)
+    if parsed.scheme == "file":
+        if parsed.netloc not in ("", "localhost"):
+            raise InvalidInputError("unsupported file URI netloc for runtime path")
+        runtime_path = Path(unquote(parsed.path)).expanduser().resolve()
+    else:
+        runtime_path = Path(value).expanduser().resolve()
+
+    mappings = local_input_mappings()
+    if not mappings:
+        return str(runtime_path)
+
+    runtime_path_str = str(runtime_path)
+    for host_prefix, container_prefix in sorted(
+        mappings, key=lambda item: len(item[1]), reverse=True
+    ):
+        if runtime_path_str == container_prefix:
+            return host_prefix
+        prefix = f"{container_prefix}{os.sep}"
+        if runtime_path_str.startswith(prefix):
+            suffix = runtime_path_str[len(prefix) :]
+            return str(PurePosixPath(host_prefix) / suffix.replace(os.sep, "/"))
+
+    return str(runtime_path)
+
+
 def local_input_host_path(value: str) -> Path:
     validate_input_reference(value)
     if input_is_s3(value):
