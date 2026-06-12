@@ -27,8 +27,8 @@ server = [
     "uvicorn>=0.34.0,<0.35.0",
     "dramatiq[redis]>=1.17.0,<2.0.0",
     "redis>=5.0.0,<6.0.0",
-    "dask>=2025.0,<2026.0",
-    "distributed>=2025.0,<2026.0",
+    "dask>=2026.1.0,<2027.0",
+    "distributed>=2026.1.0,<2027.0",
     "esgcet @ git+https://github.com/ESGF/esg-publisher.git@esgf-ng-v5.4a",
     "prometheus-client>=0.24.0,<0.26.0",
     "scipy>=1.16.0,<2.0.0",
@@ -62,8 +62,8 @@ fastapi = { version = "^0.115.0", optional = true }
 uvicorn = { version = "^0.34.0", optional = true }
 dramatiq = { version = "^1.17.0", extras = ["redis"], optional = true }
 redis = { version = "^5.0.0", optional = true }
-dask = { version = "^2025.0", optional = true }
-distributed = { version = "^2025.0", optional = true }
+dask = { version = "^2026.1.0", optional = true }
+distributed = { version = "^2026.1.0", optional = true }
 esgcet = { git = "https://github.com/ESGF/esg-publisher.git", rev = "esgf-ng-v5.4a", optional = true }
 prometheus-client = { version = "^0.24.0", optional = true }
 scipy = { version = "^1.16.0", optional = true }
