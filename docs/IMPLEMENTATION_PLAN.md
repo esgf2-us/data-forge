@@ -552,11 +552,12 @@ This document outlines a staged approach to building Data-Forge, a service for g
    - Resource quotas per user (optional)
 
 4. **CLI Authentication** (`src/dataforge/cli/auth.py`)
-   - `dataforge login` implementation
-   - OAuth2 device flow or browser-based flow
-   - Token storage (~/.dataforge/tokens.json)
-   - Token refresh logic
-   - `dataforge logout` command
+    - `dataforge login` implementation
+    - OAuth2 device flow or browser-based flow
+    - Token storage (~/.dataforge/tokens.json)
+    - Token refresh logic
+    - `dataforge logout` command
+    - Batch submission from YAML/JSON inputs
 
 5. **API Updates**
    - All job endpoints require authentication
