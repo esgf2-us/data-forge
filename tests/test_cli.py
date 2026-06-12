@@ -67,10 +67,17 @@ class StubClient:
 
 class CapturingClient(StubClient):
     last_base_url: str | None = None
+    last_api_key: str | None = None
 
-    def __init__(self, base_url: str | None = None, timeout: float = 10.0) -> None:
+    def __init__(
+        self,
+        base_url: str | None = None,
+        api_key: str | None = None,
+        timeout: float = 10.0,
+    ) -> None:
         super().__init__()
         self.__class__.last_base_url = base_url
+        self.__class__.last_api_key = api_key
 
 
 @pytest.fixture
@@ -130,6 +137,25 @@ def test_server_url_option_is_used_for_all_commands(
 
     assert result.exit_code == 0
     assert CapturingClient.last_base_url == "http://data-forge.example"
+
+
+def test_config_file_is_used_when_options_are_missing(
+    monkeypatch: pytest.MonkeyPatch, runner: CliRunner, tmp_path
+) -> None:
+    config_dir = tmp_path / ".dataforge"
+    config_dir.mkdir()
+    (config_dir / "config").write_text(
+        'server_url = "http://config.example"\napi_key = "config-key"\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr("dataforge.cli.main.DataForgeClient", CapturingClient)
+
+    result = runner.invoke(app, ["submit", "--input", "/tmp/a.nc"])
+
+    assert result.exit_code == 0
+    assert CapturingClient.last_base_url == "http://config.example"
+    assert CapturingClient.last_api_key == "config-key"
 
 
 def test_submit_resolves_relative_local_inputs_before_submission(
