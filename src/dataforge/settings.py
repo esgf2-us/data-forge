@@ -16,6 +16,19 @@ def redis_broker_url() -> str:
     return os.getenv("DATAFORGE_BROKER_REDIS_URL", "redis://localhost:6379/0")
 
 
+def api_keys() -> set[str]:
+    keys: set[str] = set()
+
+    value = os.getenv("DATAFORGE_API_KEYS")
+    if value:
+        for item in value.split(","):
+            stripped = item.strip()
+            if stripped:
+                keys.add(stripped)
+
+    return keys
+
+
 def output_mode() -> Literal["local", "s3"]:
     value = os.getenv("DATAFORGE_OUTPUT_MODE", "local").strip().lower()
     if value not in {"local", "s3"}:

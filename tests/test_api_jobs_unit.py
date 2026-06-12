@@ -48,6 +48,72 @@ def test_post_creates_queued_job(client: tuple[TestClient, FakeJobStore]) -> Non
     jobs_routes.convert_job.send.assert_called_once_with(data["id"])
 
 
+def test_post_requires_api_key_when_configured(monkeypatch: pytest.MonkeyPatch) -> None:
+    from fastapi.testclient import TestClient
+
+    from dataforge.api.app import create_app
+    from dataforge.api.deps import get_job_store
+
+    monkeypatch.setenv("DATAFORGE_API_KEYS", "secret")
+    monkeypatch.setenv("DATAFORGE_LOCAL_OUTPUT_PATH", "/tmp/from-env")
+
+    store = FakeJobStore()
+    app = create_app()
+    app.dependency_overrides[get_job_store] = lambda: store
+
+    import dataforge.api.routes.jobs as jobs_routes
+
+    send_mock = Mock()
+    monkeypatch.setattr(jobs_routes.convert_job, "send", send_mock)
+
+    c = TestClient(app)
+
+    res = c.post("/api/v1/jobs", json={"input_files": ["/tmp/input.nc"]})
+    assert res.status_code == 401
+
+    res = c.post(
+        "/api/v1/jobs",
+        json={"input_files": ["/tmp/input.nc"]},
+        headers={"X-API-Key": "secret"},
+    )
+    assert res.status_code == 201
+
+
+def test_post_accepts_any_configured_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    from fastapi.testclient import TestClient
+
+    from dataforge.api.app import create_app
+    from dataforge.api.deps import get_job_store
+
+    monkeypatch.setenv("DATAFORGE_API_KEYS", "alpha, beta")
+    monkeypatch.setenv("DATAFORGE_LOCAL_OUTPUT_PATH", "/tmp/from-env")
+
+    store = FakeJobStore()
+    app = create_app()
+    app.dependency_overrides[get_job_store] = lambda: store
+
+    import dataforge.api.routes.jobs as jobs_routes
+
+    send_mock = Mock()
+    monkeypatch.setattr(jobs_routes.convert_job, "send", send_mock)
+
+    c = TestClient(app)
+
+    res = c.post(
+        "/api/v1/jobs",
+        json={"input_files": ["/tmp/input.nc"]},
+        headers={"X-API-Key": "beta"},
+    )
+    assert res.status_code == 201
+
+    res = c.post(
+        "/api/v1/jobs",
+        json={"input_files": ["/tmp/input.nc"]},
+        headers={"X-API-Key": "gamma"},
+    )
+    assert res.status_code == 401
+
+
 def test_post_uses_env_default_local_output_path(
     client: tuple[TestClient, FakeJobStore], monkeypatch: pytest.MonkeyPatch
 ) -> None:

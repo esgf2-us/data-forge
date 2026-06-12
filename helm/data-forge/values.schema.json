@@ -196,6 +196,7 @@
       "additionalProperties": false,
       "properties": {
         "create": { "type": "boolean" },
+        "apiKeys": { "type": "array", "items": { "type": "string" } },
         "awsAccessKeyId": { "type": ["string", "null"] },
         "awsSecretAccessKey": { "type": ["string", "null"] }
       }
