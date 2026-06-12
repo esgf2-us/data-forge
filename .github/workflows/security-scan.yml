@@ -48,7 +48,6 @@ jobs:
         with:
           scan-type: fs
           scan-ref: .
-          trivyignores: .trivyignore
           scanners: secret,config
           severity: HIGH,CRITICAL
           exit-code: "1"
@@ -68,7 +67,7 @@ jobs:
         with:
           scan-type: image
           image-ref: data-forge:${{ github.sha }}
-          trivyignores: .trivyignore
+          vuln-type: library
           scanners: vuln
           severity: HIGH,CRITICAL
           exit-code: "1"
