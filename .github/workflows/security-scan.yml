@@ -1,0 +1,74 @@
+name: Security Scan
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: uv sync --all-groups --extra server
+
+      - name: Export runtime requirements
+        run: uv export --format requirements.txt --no-dev --extra server --no-emit-project --no-hashes --output-file /tmp/runtime-requirements.txt --locked
+
+      - name: Audit Python dependencies
+        continue-on-error: true
+        run: uv run pip-audit -r /tmp/runtime-requirements.txt
+
+  secret-and-config-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Run Trivy filesystem scan
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: secret,config
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          hide-progress: true
+
+  image-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build image locally
+        run: docker build -t data-forge:${{ github.sha }} .
+
+      - name: Scan container image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: data-forge:${{ github.sha }}
+          vuln-type: library
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          hide-progress: true

@@ -27,6 +27,7 @@ spec:
       securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- $apiKeys := .Values.secrets.apiKeys | default (list) }}
       {{- $awsAccessKeyId := default "" .Values.secrets.awsAccessKeyId }}
       {{- $awsSecretAccessKey := default "" .Values.secrets.awsSecretAccessKey }}
       containers:
@@ -43,7 +44,7 @@ spec:
           envFrom:
             - configMapRef:
                 name: {{ include "data-forge.fullname" . }}
-            {{- if and .Values.secrets.create (or $awsAccessKeyId $awsSecretAccessKey) }}
+            {{- if and .Values.secrets.create (or (gt (len $apiKeys) 0) $awsAccessKeyId $awsSecretAccessKey) }}
             - secretRef:
                 name: {{ include "data-forge.fullname" . }}-secrets
             {{- end }}

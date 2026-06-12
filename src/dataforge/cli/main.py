@@ -3,8 +3,12 @@ from __future__ import annotations
 import glob
 import json
 import time
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Annotated, Any
 from urllib.parse import unquote, urlparse
+
+import tomllib
 
 import click
 import typer
@@ -21,26 +25,83 @@ stac_app = typer.Typer(add_completion=False, no_args_is_help=True)
 app.add_typer(stac_app, name="stac")
 
 
+@dataclass
 class CliConfig:
-    def __init__(self, server_url: str | None = None) -> None:
-        self.server_url = server_url
+    server_url: str | None = None
+    api_key: str | None = None
+
+
+def _default_config_path() -> Path:
+    return Path.home() / ".dataforge" / "config"
+
+
+def _load_cli_config(config_path: str | None) -> CliConfig:
+    path = Path(config_path).expanduser() if config_path else _default_config_path()
+    if not path.exists():
+        return CliConfig()
+
+    try:
+        with path.open("rb") as handle:
+            raw = tomllib.load(handle)
+    except OSError as e:
+        raise typer.BadParameter(f"unable to read config file {path}: {e}") from e
+    except tomllib.TOMLDecodeError as e:
+        raise typer.BadParameter(f"invalid TOML in config file {path}: {e}") from e
+
+    if not isinstance(raw, dict):
+        raise typer.BadParameter(f"config file {path} must contain a TOML table")
+
+    if isinstance(raw.get("default"), dict):
+        raw = raw["default"]
+
+    server_url = raw.get("server_url")
+    api_key = raw.get("api_key")
+    if server_url is not None and not isinstance(server_url, str):
+        raise typer.BadParameter(f"config file {path}: server_url must be a string")
+    if api_key is not None and not isinstance(api_key, str):
+        raise typer.BadParameter(f"config file {path}: api_key must be a string")
+
+    server_url_value = server_url.strip() if isinstance(server_url, str) else None
+    api_key_value = api_key.strip() if isinstance(api_key, str) else None
+    return CliConfig(
+        server_url=server_url_value or None,
+        api_key=api_key_value or None,
+    )
 
 
 @app.callback()
 def main(
     ctx: typer.Context,
+    config: Annotated[
+        str | None,
+        typer.Option(
+            "--config",
+            help="Path to a TOML config file. Defaults to ~/.dataforge/config.",
+        ),
+    ] = None,
     server_url: Annotated[
         str | None,
         typer.Option("--server-url", help="Data-Forge server address."),
     ] = None,
+    api_key: Annotated[
+        str | None,
+        typer.Option("--api-key", help="API key sent as the X-API-Key header."),
+    ] = None,
 ) -> None:
-    ctx.obj = CliConfig(server_url=server_url)
+    file_config = _load_cli_config(config)
+    ctx.obj = CliConfig(
+        server_url=server_url if server_url is not None else file_config.server_url,
+        api_key=api_key if api_key is not None else file_config.api_key,
+    )
 
 
 def _client() -> DataForgeClient:
     ctx = click.get_current_context()
     state = ctx.obj if isinstance(ctx.obj, CliConfig) else None
-    return DataForgeClient(base_url=state.server_url if state else None)
+    return DataForgeClient(
+        base_url=state.server_url if state else None,
+        api_key=state.api_key if state else None,
+    )
 
 
 def _emit_json(payload: Any) -> None:
