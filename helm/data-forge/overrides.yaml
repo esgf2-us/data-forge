@@ -1,6 +1,6 @@
 image:
   repository: ghcr.io/esgf2-us/data-forge
-  tag: 0.1.1
+  tag: pr-4
   pullPolicy: IfNotPresent
 
 api:
@@ -11,14 +11,12 @@ api:
   resources: {}
   podAnnotations: {}
   extraEnv: []
-  extraVolumeMounts: []
 
 worker:
   replicaCount: 1
   resources: {}
   podAnnotations: {}
   extraEnv: []
-  extraVolumeMounts: []
   autoscaling:
     enabled: false
     minReplicas: 1
@@ -51,10 +49,14 @@ ingress:
 dataforge:
   outputMode: local
   corsAllowedOrigins: "*"
-  localOutputPath: /data/kerchunks
+  localOutputPath:
   s3OutputPath: s3://dataforge-kerchunks/kerchunks
-  localInputMappings: []
-  extraVolumeMounts: []
+  localInputMappings:
+    - host_prefix: /home/titters/devel/work/data-forge/data/samples
+      container_prefix: /datasets
+  extraVolumeMounts:
+    - name: datasets
+      mountPath: /datasets
   dask:
     nWorkers:
     threadsPerWorker: "1"
@@ -67,11 +69,13 @@ storage:
   mountPath: /data
   size: 20Gi
 
-extraVolumes: []
+extraVolumes:
+  - name: datasets
+    hostPath:
+      path: /home/titters/devel/work/data-forge/data/samples/
 
 secrets:
   create: true
-  apiKeys: []
 
 serviceAccount:
   create: false
@@ -80,11 +84,6 @@ podSecurityContext:
   fsGroup: 1000
 
 containerSecurityContext:
-  allowPrivilegeEscalation: false
-  readOnlyRootFilesystem: true
-  runAsNonRoot: true
   runAsUser: 1000
   runAsGroup: 1000
-  capabilities:
-    drop:
-      - ALL
+  runAsNonRoot: true

@@ -17,10 +17,14 @@ spec:
         {{- include "data-forge.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: redis
     spec:
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: redis
           image: "{{ .Values.redis.image.repository }}:{{ .Values.redis.image.tag }}"
           imagePullPolicy: {{ .Values.redis.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
           ports:
             - name: redis
               containerPort: {{ .Values.redis.service.port }}
@@ -39,9 +43,13 @@ spec:
             {{- toYaml . | nindent 12 }}
           {{- end }}
           volumeMounts:
+            - name: tmp
+              mountPath: /tmp
             - name: redis-data
               mountPath: /data
       volumes:
+        - name: tmp
+          emptyDir: {}
         - name: redis-data
           {{- if .Values.redis.persistence.enabled }}
           persistentVolumeClaim:
