@@ -71,6 +71,7 @@ extraVolumes: []
 
 secrets:
   create: true
+  apiKeys: []
 
 serviceAccount:
   create: false

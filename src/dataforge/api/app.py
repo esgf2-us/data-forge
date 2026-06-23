@@ -6,11 +6,11 @@ from time import perf_counter
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.requests import Request
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 
 from dataforge.api.routes.jobs import router as jobs_router
 from dataforge.monitoring.metrics import API_REQUEST_LATENCY_SECONDS, metrics_payload
-from dataforge.settings import cors_allowed_origins, output_mode, stac_api
+from dataforge.settings import api_keys, cors_allowed_origins, output_mode, stac_api
 
 
 def create_app() -> FastAPI:
@@ -39,6 +39,15 @@ def create_app() -> FastAPI:
             method=request.method, path=request.url.path
         ).observe(elapsed)
         return response
+
+    @app.middleware("http")
+    async def enforce_api_key(request: Request, call_next):
+        expected = api_keys()
+        if expected and request.url.path.startswith("/api/v1"):
+            provided = request.headers.get("X-API-Key")
+            if provided not in expected:
+                return JSONResponse(status_code=401, content={"detail": "unauthorized"})
+        return await call_next(request)
 
     @app.get("/health", tags=["health"])
     def healthcheck() -> dict[str, str | bool]:

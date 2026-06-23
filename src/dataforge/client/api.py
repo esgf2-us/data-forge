@@ -11,9 +11,17 @@ def _api_root() -> str:
 
 
 class DataForgeClient:
-    def __init__(self, base_url: str | None = None, timeout: float = 10.0) -> None:
+    def __init__(
+        self,
+        base_url: str | None = None,
+        api_key: str | None = None,
+        timeout: float = 10.0,
+    ) -> None:
         self._base_url = (base_url or _api_root()).rstrip("/")
         self._timeout = timeout
+        self._headers: dict[str, str] = {}
+        if api_key:
+            self._headers["X-API-Key"] = api_key
 
     def create_job(self, payload: dict[str, Any]) -> dict[str, Any]:
         return self._request("POST", "/api/v1/jobs", json=payload)
@@ -46,7 +54,11 @@ class DataForgeClient:
 
     def _request(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
         try:
-            with httpx.Client(base_url=self._base_url, timeout=self._timeout) as client:
+            with httpx.Client(
+                base_url=self._base_url,
+                timeout=self._timeout,
+                headers=self._headers,
+            ) as client:
                 response = client.request(method, path, **kwargs)
                 response.raise_for_status()
         except httpx.HTTPStatusError as e:
