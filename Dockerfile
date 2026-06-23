@@ -20,6 +20,9 @@ RUN python -m venv /opt/venv \
 
 FROM python:3.14-slim AS runtime
 
+ARG APP_UID=1000
+ARG APP_GID=1000
+
 LABEL org.opencontainers.image.source="https://github.com/esgf2-us/data-forge" \
       org.opencontainers.image.description="Asynchronous service for generating data access representations and publishing searchable catalogs for large climate datasets." \
       org.opencontainers.image.licenses="MIT"
@@ -30,7 +33,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+RUN groupadd --gid "${APP_GID}" dataforge \
+    && useradd --uid "${APP_UID}" --gid "${APP_GID}" --create-home --shell /usr/sbin/nologin dataforge
+
 COPY --from=builder /opt/venv /opt/venv
+
+USER dataforge
 
 EXPOSE 8000
 

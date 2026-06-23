@@ -69,8 +69,9 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- if or (eq .Values.dataforge.outputMode "local") .Values.storage.existingClaim .Values.dataforge.extraVolumeMounts .Values.worker.extraVolumeMounts }}
           volumeMounts:
+            - name: tmp
+              mountPath: /tmp
             {{- if or (eq .Values.dataforge.outputMode "local") .Values.storage.existingClaim }}
             - name: data
               mountPath: {{ .Values.storage.mountPath }}
@@ -81,9 +82,9 @@ spec:
             {{- with .Values.worker.extraVolumeMounts }}
               {{- toYaml . | nindent 12 }}
             {{- end }}
-          {{- end }}
-      {{- if or (eq .Values.dataforge.outputMode "local") .Values.storage.existingClaim .Values.extraVolumes }}
       volumes:
+        - name: tmp
+          emptyDir: {}
         {{- if or (eq .Values.dataforge.outputMode "local") .Values.storage.existingClaim }}
         - name: data
           persistentVolumeClaim:
@@ -92,4 +93,3 @@ spec:
         {{- with .Values.extraVolumes }}
           {{- toYaml . | nindent 8 }}
         {{- end }}
-      {{- end }}
