@@ -56,7 +56,17 @@ spec:
                 - -c
                 - import os, redis; redis.Redis.from_url(os.environ['DATAFORGE_BROKER_REDIS_URL']).ping()
             initialDelaySeconds: 10
+            timeoutSeconds: 5
             periodSeconds: 15
+          startupProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - import os, redis; redis.Redis.from_url(os.environ['DATAFORGE_BROKER_REDIS_URL']).ping()
+            timeoutSeconds: 5
+            periodSeconds: 10
+            failureThreshold: 12
           readinessProbe:
             exec:
               command:
@@ -64,6 +74,7 @@ spec:
                 - -c
                 - import os, redis; redis.Redis.from_url(os.environ['DATAFORGE_BROKER_REDIS_URL']).ping()
             initialDelaySeconds: 5
+            timeoutSeconds: 5
             periodSeconds: 10
           {{- with .Values.worker.resources }}
           resources:
