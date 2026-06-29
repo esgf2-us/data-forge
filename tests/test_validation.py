@@ -122,3 +122,35 @@ def test_preflight_validate_rewrites_local_input_through_mapping(
         [str(in_file)],
         ConversionConfig(output_prefix=str(tmp_path / "out"), output_name="ref"),
     )
+
+
+def test_expand_input_for_runtime_round_trips_container_matches_to_host_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from dataforge.core import input_paths
+
+    host_dir = tmp_path / "host"
+    container_dir = Path("/data/host")
+
+    monkeypatch.setenv(
+        "DATAFORGE_LOCAL_INPUT_MAPPINGS",
+        (
+            '[{"host_prefix":"'
+            + str(host_dir.resolve())
+            + '","container_prefix":"'
+            + str(container_dir)
+            + '"}]'
+        ),
+    )
+
+    def _fake_glob(pattern: str, recursive: bool = True):
+        assert pattern == str(container_dir / "nested" / "*.nc")
+        return [str(container_dir / "nested" / "a.nc")]
+
+    monkeypatch.setattr(input_paths.glob, "glob", _fake_glob)
+
+    result = input_paths.expand_input_for_runtime(
+        str(host_dir / "nested" / "*.nc")
+    )
+
+    assert result == [str((host_dir / "nested" / "a.nc").resolve())]

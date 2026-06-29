@@ -86,7 +86,7 @@ def expand_input_for_runtime(value: str) -> list[str]:
     if not matches:
         raise InvalidInputError(f"no local input files matched pattern: {value}")
 
-    return [str(Path(match).expanduser().resolve()) for match in matches]
+    return [externalize_runtime_path(str(Path(match).expanduser().resolve())) for match in matches]
 
 
 def externalize_runtime_path(value: str) -> str:
