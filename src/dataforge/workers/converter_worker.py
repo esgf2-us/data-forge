@@ -87,7 +87,7 @@ def run_job(store: JobStore, job_id: str) -> None:
     try:
         submission = store.get(job_id).submission
         output_name = submission.output_name
-        if output_name is None and submission.output_mode == "local":
+        if output_name is None and submission.output_mode != "s3":
             output_name = default_output_name(submission.input_files)
         if output_name is None:
             output_name = job_id
@@ -134,10 +134,12 @@ def run_job(store: JobStore, job_id: str) -> None:
         )
 
         result_url = str(output_uri)
-        if submission.output_mode == "local":
+        if submission.output_mode != "s3":
             result_url = _local_result_url(result_url)
 
-        result_uri_for_metadata = result_url if submission.output_mode == "local" else str(output_uri)
+        result_uri_for_metadata = (
+            result_url if submission.output_mode != "s3" else str(output_uri)
+        )
 
         store.set_result(job_id, result_url)
         logger.info("worker job result stored", extra={"job_id": job_id})

@@ -31,7 +31,7 @@ def _validate_output_name(value: str | None) -> str | None:
     return value
 
 
-def default_local_output_directory(input_files: list[str]) -> str:
+def default_input_output_directory(input_files: list[str]) -> str:
     if not input_files:
         raise ValueError("input_files must be non-empty")
 
@@ -39,6 +39,10 @@ def default_local_output_directory(input_files: list[str]) -> str:
     if len(parents) == 1:
         return str(parents[0])
     return os.path.commonpath([str(parent) for parent in parents])
+
+
+def default_local_output_directory(input_files: list[str]) -> str:
+    return default_input_output_directory(input_files)
 
 
 def default_output_name(input_files: list[str]) -> str:
@@ -107,13 +111,15 @@ class JobCreateRequest(BaseModel):
             self.dataset_id = validate_dataset_id(self.dataset_id)
         return self
 
-    def to_submission(self, output_mode: Literal["local", "s3"]) -> "JobSubmission":
+    def to_submission(
+        self, output_mode: Literal["local", "input", "s3"]
+    ) -> "JobSubmission":
         return JobSubmission(output_mode=output_mode, **self.model_dump())
 
 
 class JobSubmission(BaseModel):
     input_files: list[str]
-    output_mode: Literal["local", "s3"]
+    output_mode: Literal["local", "input", "s3"]
     output_path: str | None = None
     output_name: str | None = None
     overwrite_existing: bool = False
@@ -159,14 +165,14 @@ class JobSubmission(BaseModel):
             output_path = None
 
         if self.output_mode == "local" and output_path is None:
+            output_path = local_output_path()
+        if self.output_mode == "input" and output_path is None:
             if all(input_is_local(value) for value in self.input_files):
-                output_path = default_local_output_directory(self.input_files)
+                output_path = default_input_output_directory(self.input_files)
             else:
-                output_path = local_output_path()
-                if output_path is None:
-                    raise ValueError(
-                        "output_path must be provided for local mode when inputs include s3 URLs"
-                    )
+                raise ValueError(
+                    "output_path must be provided for input mode when inputs are not local paths"
+                )
         if self.output_mode == "s3" and output_path is None:
             output_path = s3_output_path()
 
@@ -175,16 +181,18 @@ class JobSubmission(BaseModel):
 
         self.output_path = output_path
 
+        if self.output_mode in {"local", "input"} and self.output_path.startswith(
+            "s3://"
+        ):
+            raise ValueError(
+                "output_path must be a local path when output_mode is local or input"
+            )
         if self.output_mode == "s3" and not self.output_path.startswith("s3://"):
             raise ValueError("output_path must be an s3:// URL when output_mode is s3")
         if self.output_mode == "s3":
             p = urlparse(self.output_path)
             if not p.netloc:
                 raise ValueError("output_path must include an S3 bucket")
-        if self.output_mode == "local" and self.output_path.startswith("s3://"):
-            raise ValueError(
-                "output_path must be a local path when output_mode is local"
-            )
 
         if self.publish_to_stac and not self.dataset_id:
             raise ValueError("dataset_id is required when publish_to_stac is true")

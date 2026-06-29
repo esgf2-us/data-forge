@@ -43,7 +43,7 @@ To upgrade from OCI, use the same `oci://` reference with the desired `--version
 - `image.repository` / `image.tag`: container image to deploy. The chart defaults to the current release tag; pin a digest if you need immutable deployments.
 - `worker.replicaCount`: static worker count
 - `worker.autoscaling.enabled`: enable worker HPA
-- `dataforge.outputMode`: `local` or `s3`
+- `dataforge.outputMode`: `local`, `input`, or `s3`
 - `dataforge.brokerRedisUrl` / `dataforge.redisUrl`: external Redis endpoints when `redis.enabled=false`
 - `storage.existingClaim`: shared PVC for local outputs
 - `extraVolumes`: additional Kubernetes volumes for mounted dataset inputs
@@ -60,16 +60,16 @@ To upgrade from OCI, use the same `oci://` reference with the desired `--version
 - `Chart.yaml.version`: chart release version
 - `image.tag`: defaults to the application release version so chart installs do not use `latest`
 
-## Local Output Mode
+## Local Output Modes
 
-For local-input jobs, the default output path is the source directory of the inputs, so Kerchunk JSON is written next to the input files. If a job includes `s3://` inputs, you must provide a writable local output path.
+`input` mode writes Kerchunk JSON beside the input data. `local` mode writes to the configured `dataforge.localOutputPath` value, which defaults to `/data/kerchunks`.
 
-For local output mode, mount a shared persistent volume that is visible to both API and worker pods if you want to override the default and write to a dedicated output location. Either:
+For `local` output mode, mount a shared persistent volume that is visible to both API and worker pods. Either:
 
 - set `storage.existingClaim` to an existing PVC, or
 - let the chart create a PVC by leaving `storage.existingClaim` empty
 
-The default output path inside the pods is `/data/kerchunks`.
+If you want outputs alongside the source files, use `dataforge.outputMode: input`.
 
 ### Example: writable local dataset mount
 

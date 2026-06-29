@@ -178,7 +178,7 @@ def test_job_submission_requires_output_path_for_local_mode_when_inputs_are_s3()
 ):
     from dataforge.models.job import JobSubmission
 
-    with pytest.raises(ValidationError, match="output_path must be provided"):
+    with pytest.raises(ValidationError, match="output_path must be non-empty"):
         JobSubmission(
             input_files=["s3://bucket/a.nc"],
             output_mode="local",
@@ -233,7 +233,7 @@ def test_job_submission_rejects_empty_output_path() -> None:
         )
 
 
-def test_job_submission_defaults_local_output_path_to_source_directory_even_with_env(
+def test_job_submission_defaults_local_output_path_to_env_directory(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from dataforge.models.job import JobSubmission
@@ -243,6 +243,21 @@ def test_job_submission_defaults_local_output_path_to_source_directory_even_with
     sub = JobSubmission(
         input_files=["/tmp/a.nc"],
         output_mode="local",
+    )
+
+    assert sub.output_path == "/tmp/from-env"
+
+
+def test_job_submission_defaults_input_mode_to_source_directory(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from dataforge.models.job import JobSubmission
+
+    monkeypatch.setenv("DATAFORGE_LOCAL_OUTPUT_PATH", "/tmp/from-env")
+
+    sub = JobSubmission(
+        input_files=["/tmp/a.nc"],
+        output_mode="input",
     )
 
     assert sub.output_path == "/tmp"
@@ -278,6 +293,20 @@ def test_job_submission_uses_env_default_for_local_mode_when_inputs_include_s3(
     assert sub.output_path == "/tmp/from-env"
 
 
+def test_job_submission_rejects_input_mode_for_remote_inputs_without_output_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from dataforge.models.job import JobSubmission
+
+    monkeypatch.delenv("DATAFORGE_LOCAL_OUTPUT_PATH", raising=False)
+
+    with pytest.raises(ValidationError, match="input mode"):
+        JobSubmission(
+            input_files=["s3://bucket/a.nc"],
+            output_mode="input",
+        )
+
+
 def test_job_submission_defaults_local_output_path_to_source_directory(
     tmp_path,
 ) -> None:
@@ -289,7 +318,7 @@ def test_job_submission_defaults_local_output_path_to_source_directory(
 
     sub = JobSubmission(
         input_files=[str(in_file)],
-        output_mode="local",
+        output_mode="input",
     )
 
     assert sub.output_path == str(in_file.parent.resolve())
@@ -306,7 +335,7 @@ def test_job_submission_defaults_local_output_path_for_file_uri_input(
 
     sub = JobSubmission(
         input_files=[f"file://localhost{in_file}"],
-        output_mode="local",
+        output_mode="input",
     )
 
     assert sub.output_path == str(in_file.parent.resolve())
@@ -324,7 +353,7 @@ def test_job_submission_defaults_local_output_path_uses_runtime_mapping(
 
     sub = JobSubmission(
         input_files=["/home/titters/devel/work/data-forge/data/samples/air_temperature.nc"],
-        output_mode="local",
+        output_mode="input",
     )
 
     assert sub.output_path == "/datasets"
