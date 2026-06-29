@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import glob
 import os
 from pathlib import Path, PurePosixPath
 from urllib.parse import unquote, urlparse
@@ -70,6 +71,22 @@ def normalize_input_for_runtime(value: str) -> str:
     raise InvalidInputError(
         f"input path is not covered by DATAFORGE_LOCAL_INPUT_MAPPINGS: {host_path}"
     )
+
+
+def expand_input_for_runtime(value: str) -> list[str]:
+    validate_input_reference(value)
+    if input_is_s3(value):
+        return [value]
+
+    pattern = normalize_input_for_runtime(value)
+    if not glob.has_magic(pattern):
+        return [pattern]
+
+    matches = sorted(glob.glob(pattern, recursive=True))
+    if not matches:
+        raise InvalidInputError(f"no local input files matched pattern: {value}")
+
+    return [externalize_runtime_path(str(Path(match).expanduser().resolve())) for match in matches]
 
 
 def externalize_runtime_path(value: str) -> str:

@@ -133,6 +133,45 @@ def test_post_uses_env_default_local_output_path(
     assert store.get(job_id).submission.output_mode == "local"
 
 
+def test_post_expands_local_wildcards_server_side(
+    client: tuple[TestClient, FakeJobStore], tmp_path: Path
+) -> None:
+    c, store = client
+
+    source_dir = tmp_path / "source"
+    source_dir.mkdir(parents=True)
+    a = source_dir / "a.nc"
+    b = source_dir / "b.nc"
+    a.write_text("one", encoding="utf-8")
+    b.write_text("two", encoding="utf-8")
+
+    res = c.post(
+        "/api/v1/jobs",
+        json={"input_files": [str(source_dir / "*.nc")]},
+    )
+
+    assert res.status_code == 201
+    job_id = res.json()["id"]
+    assert store.get(job_id).submission.input_files == [str(a.resolve()), str(b.resolve())]
+
+
+def test_post_rejects_unmatched_local_wildcards_server_side(
+    client: tuple[TestClient, FakeJobStore], tmp_path: Path
+) -> None:
+    c, _store = client
+
+    source_dir = tmp_path / "source"
+    source_dir.mkdir(parents=True)
+
+    res = c.post(
+        "/api/v1/jobs",
+        json={"input_files": [str(source_dir / "*.nc")]},
+    )
+
+    assert res.status_code == 422
+    assert "no local input files matched pattern" in res.json()["detail"]
+
+
 def test_post_can_enable_overwrite_existing(
     client: tuple[TestClient, FakeJobStore], monkeypatch: pytest.MonkeyPatch
 ) -> None:

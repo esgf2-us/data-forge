@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import glob
 import json
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Any
-from urllib.parse import unquote, urlparse
 
 import tomllib
 
@@ -114,18 +112,6 @@ def _expand_cli_input(value: str) -> list[str]:
     except ValueError as e:
         raise typer.BadParameter(str(e), param_hint="--input") from e
 
-    if not input_is_local(value):
-        return [value]
-
-    pattern = _local_glob_pattern(value)
-    if glob.has_magic(pattern):
-        matches = sorted(glob.glob(pattern, recursive=True))
-        if not matches:
-            raise typer.BadParameter(
-                f"no local input files matched pattern: {value}", param_hint="--input"
-            )
-        return matches
-
     return [value]
 
 
@@ -138,13 +124,6 @@ def _normalize_cli_inputs(input_files: list[str]) -> list[str]:
             else:
                 normalized.append(expanded)
     return normalized
-
-
-def _local_glob_pattern(value: str) -> str:
-    parsed = urlparse(value)
-    if parsed.scheme == "file":
-        return unquote(parsed.path)
-    return value
 
 
 @app.command("submit")
