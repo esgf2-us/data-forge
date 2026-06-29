@@ -29,10 +29,10 @@ def api_keys() -> set[str]:
     return keys
 
 
-def output_mode() -> Literal["local", "s3"]:
+def output_mode() -> Literal["local", "input", "s3"]:
     value = os.getenv("DATAFORGE_OUTPUT_MODE", "local").strip().lower()
-    if value not in {"local", "s3"}:
-        raise ValueError("DATAFORGE_OUTPUT_MODE must be one of: local, s3")
+    if value not in {"local", "input", "s3"}:
+        raise ValueError("DATAFORGE_OUTPUT_MODE must be one of: local, input, s3")
     return value
 
 

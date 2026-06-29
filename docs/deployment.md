@@ -67,7 +67,7 @@ Helm also validates the chart's `values.schema.json` during install, upgrade, li
 ## Important Values
 
 - `image.repository` and `image.tag`: application image to deploy
-- `dataforge.outputMode`: `local` or `s3`
+- `dataforge.outputMode`: `local`, `input`, or `s3`
 - `dataforge.brokerRedisUrl` and `dataforge.redisUrl`: external Redis endpoints when not deploying in-chart Redis
 - `storage.existingClaim`: shared PVC for local output mode
 - `extraVolumes`: additional mounted dataset volumes
@@ -96,9 +96,11 @@ Optional STAC, S3 endpoint, and AWS credential settings are only rendered into t
 
 ## Local Storage Notes
 
-For `local` output mode, both API and worker pods must share the same mounted volume and path. The chart supports either:
+For `input` output mode, both API and worker pods must share the same mounted volume and path. The chart supports either:
 
 - a pre-existing PVC via `storage.existingClaim`, or
 - a chart-managed PVC
+
+For `local` output mode, the pods write to `dataforge.localOutputPath` instead.
 
 If your inputs live on multiple volumes, add them with `extraVolumes` and mount them into both API and worker with matching `api.extraVolumeMounts` and `worker.extraVolumeMounts`. Then set `dataforge.localInputMappings` so host-side submission paths map onto those in-container mount paths.

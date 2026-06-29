@@ -40,7 +40,7 @@ class Job(JobModel):
                 "submission": {
                     "input_files": ["/data/cmip6/tas_day_0001.nc"],
                     "output_mode": "local",
-                    "output_path": "/data/cmip6",
+                    "output_path": "/data/kerchunks",
                     "output_name": "tas_day_kerchunk",
                     "overwrite_existing": False,
                     "concat_dims": ["time"],

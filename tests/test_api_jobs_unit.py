@@ -119,7 +119,6 @@ def test_post_uses_env_default_local_output_path(
 ) -> None:
     c, store = client
     monkeypatch.setenv("DATAFORGE_LOCAL_OUTPUT_PATH", "/tmp/from-env")
-    input_dir = Path("/tmp/input-dir")
 
     res = c.post(
         "/api/v1/jobs",
@@ -130,7 +129,7 @@ def test_post_uses_env_default_local_output_path(
 
     assert res.status_code == 201
     job_id = res.json()["id"]
-    assert store.get(job_id).submission.output_path == str(input_dir)
+    assert store.get(job_id).submission.output_path == "/tmp/from-env"
     assert store.get(job_id).submission.output_mode == "local"
 
 

@@ -127,7 +127,7 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "outputMode": { "type": "string", "enum": ["local", "s3"] },
+        "outputMode": { "type": "string", "enum": ["local", "input", "s3"] },
         "corsAllowedOrigins": { "type": "string" },
         "brokerRedisUrl": { "type": ["string", "null"] },
         "redisUrl": { "type": ["string", "null"] },
