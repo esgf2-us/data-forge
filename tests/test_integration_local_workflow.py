@@ -6,7 +6,7 @@ from dataforge.job_store.fake import FakeJobStore
 from dataforge.models.job import JobSubmission
 
 
-def test_local_workflow_writes_next_to_source_data(monkeypatch, tmp_path: Path) -> None:
+def test_input_workflow_writes_next_to_source_data(monkeypatch, tmp_path: Path) -> None:
     from dataforge.core.dask_converter import DaskConverter
     from dataforge.workers.converter_worker import run_job
 
@@ -22,7 +22,7 @@ def test_local_workflow_writes_next_to_source_data(monkeypatch, tmp_path: Path) 
     job = store.create(
         JobSubmission(
             input_files=[str(in_file1), str(in_file2)],
-            output_mode="local",
+            output_mode="input",
         )
     )
 
@@ -46,7 +46,7 @@ def test_local_workflow_writes_next_to_source_data(monkeypatch, tmp_path: Path) 
     assert expected_output.exists()
 
 
-def test_local_workflow_uses_single_file_stem(monkeypatch, tmp_path: Path) -> None:
+def test_input_workflow_uses_single_file_stem(monkeypatch, tmp_path: Path) -> None:
     from dataforge.core.dask_converter import DaskConverter
     from dataforge.workers.converter_worker import run_job
 
@@ -61,7 +61,7 @@ def test_local_workflow_uses_single_file_stem(monkeypatch, tmp_path: Path) -> No
     job = store.create(
         JobSubmission(
             input_files=[str(in_file)],
-            output_mode="local",
+            output_mode="input",
         )
     )
 
