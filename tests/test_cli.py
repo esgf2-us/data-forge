@@ -180,7 +180,7 @@ def test_submit_resolves_relative_local_inputs_before_submission(
     }
 
 
-def test_submit_expands_local_wildcards_before_submission(
+def test_submit_preserves_local_wildcards_before_submission(
     monkeypatch: pytest.MonkeyPatch, runner: CliRunner, tmp_path
 ) -> None:
     stub = StubClient()
@@ -198,13 +198,13 @@ def test_submit_expands_local_wildcards_before_submission(
 
     assert result.exit_code == 0
     assert stub.created_payload == {
-        "input_files": [str(a.resolve()), str(b.resolve())],
+        "input_files": [str((tmp_path / "data" / "samples" / "*.nc").resolve())],
         "concat_dims": ["time"],
         "inline_threshold": 300,
     }
 
 
-def test_submit_rejects_unmatched_local_wildcards(
+def test_submit_preserves_unmatched_local_wildcards(
     monkeypatch: pytest.MonkeyPatch, runner: CliRunner, tmp_path
 ) -> None:
     stub = StubClient()
@@ -213,10 +213,12 @@ def test_submit_rejects_unmatched_local_wildcards(
 
     result = runner.invoke(app, ["submit", "--input", "data/samples/*.nc"])
 
-    assert result.exit_code != 0
-    normalized = " ".join(strip_ansi(result.output).split())
-    assert "no local input files matched pattern" in normalized
-    assert stub.created_payload is None
+    assert result.exit_code == 0
+    assert stub.created_payload == {
+        "input_files": [str((tmp_path / "data" / "samples" / "*.nc").resolve())],
+        "concat_dims": ["time"],
+        "inline_threshold": 300,
+    }
 
 
 def test_submit_preserves_s3_inputs(

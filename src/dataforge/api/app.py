@@ -9,6 +9,7 @@ from fastapi.requests import Request
 from fastapi.responses import JSONResponse, Response
 
 from dataforge.api.routes.jobs import router as jobs_router
+from dataforge.models.config import InvalidConfigError, InvalidInputError
 from dataforge.monitoring.metrics import API_REQUEST_LATENCY_SECONDS, metrics_payload
 from dataforge.settings import api_keys, cors_allowed_origins, output_mode, stac_api
 
@@ -48,6 +49,14 @@ def create_app() -> FastAPI:
             if provided not in expected:
                 return JSONResponse(status_code=401, content={"detail": "unauthorized"})
         return await call_next(request)
+
+    @app.exception_handler(InvalidInputError)
+    async def invalid_input_handler(_: Request, exc: InvalidInputError) -> JSONResponse:
+        return JSONResponse(status_code=422, content={"detail": str(exc)})
+
+    @app.exception_handler(InvalidConfigError)
+    async def invalid_config_handler(_: Request, exc: InvalidConfigError) -> JSONResponse:
+        return JSONResponse(status_code=422, content={"detail": str(exc)})
 
     @app.get("/health", tags=["health"])
     def healthcheck() -> dict[str, str | bool]:

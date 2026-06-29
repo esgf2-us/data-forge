@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 from dataforge.api.deps import get_job_store
+from dataforge.core.input_paths import expand_input_for_runtime
 from dataforge.job_store.base import JobStore
 from dataforge.models.api import (
     Job,
@@ -29,7 +30,13 @@ def create_job(
     request: JobCreateRequest,
     store: Annotated[JobStore, Depends(get_job_store)],
 ) -> Job:
-    submission = request.to_submission(output_mode())
+    expanded_inputs: list[str] = []
+    for value in request.input_files:
+        expanded_inputs.extend(expand_input_for_runtime(value))
+
+    submission = request.model_copy(update={"input_files": expanded_inputs}).to_submission(
+        output_mode()
+    )
     job = store.create(submission)
     JOBS_SUBMITTED.inc()
     convert_job.send(job.id)
